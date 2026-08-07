@@ -1,99 +1,144 @@
-# AI-TEST / api-flows —— 多系统测试基线目录规范 + playbook
+# baseline-test · 测试基线工具箱
 
-> 每个**系统**（risk 风控、slop 开放平台…）单独维护一套自包含目录。根目录只放跨系统共享基建。
-> **标杆样板**：`risk/normal-work-order/`（满配 + 已迁 auto/docs 新布局）。
+> 给一个系统 URL + 模块，帮你产出并长期维护一套**可信回归基线**。
+> 不是让你信 AI，而是让结果由机器断言 / SQL / 人眼各司其职。
 
-## 顶层布局
+---
+
+## 这是什么
+
+| 传统录制回放 | 本工具 |
+|---|---|
+| 跑绿 = 过 | 跑绿 ≠ 过，数据真伪要 SQL 兜底 |
+| 只验接口返回码 | 三桶模型：机器🟢 + DB🟡 + 人工🔴 |
+| 用例烂掉没人知道 | 功能地图是唯一真源，代码改了必须回填 |
+| 本地脚本各自飞 | 统一仓库，按模块协作，`_toolkit` 共享 |
+
+**产出物**：功能地图 · 接口 flow yaml · UI 自动化用例 · 两段式断言 · 人工校验清单 · 回归报告 · 测试平台导入包（cases.json）
+
+---
+
+## 仓库结构
 
 ```
-api-flows/
-├── _toolkit/          # ★ 全局共享代码（所有系统引用，只此一份）
-│   ├── new-module.sh          # ★ 脚手架：一键建模块骨架
-│   ├── cdp_type.py            # antd 受控输入助手
-│   ├── upload_cases.py        # octopuses 用例上传（内含硬编码 flow 路径清单，移文件后须同步改）
+baseline-test/
+├── _toolkit/              # 全局共享脚本（所有人共用，不要复制到模块里）
+│   ├── new-module.sh      # 一键建模块骨架
+│   ├── upload_cases.py    # 上传用例到 octopuses 测试平台
+│   ├── cdp_type.py        # Ant Design 受控输入助手
 │   └── 接口测试全链路方法论.md
-├── .chrome-profile/   # 共享持久化登录态（skill 硬编码，勿移）
-├── .chrome-port       # 共享调试端口
-├── capture/           # 共享抓包（session 命名 <system>-<module>-<日期>）
-├── README.md          # ← 本文件
-├── risk/              # 系统①：风控（自包含）
-└── slop/ …            # 系统②：以后新建，同构
+├── config.example.yaml    # 配置模板（cp 后改成自己的值）
+├── 使用手册.md            # 详细安装 + 配置 + 使用说明（新人必读）
+├── risk/                  # 风控系统（@liyanda 维护）
+│   └── normal-work-order/ # ★ 满配参考样例（新建模块照这个结构做）
+└── slop/                  # 开放平台（待建）
 ```
 
-## 模块内部规范（新标准：auto/docs 二分）
-
-```
-<system>/<module>/
-├── _meta.yaml            # 模块元信息 + 仓库指向（backend/frontend）
-├── 功能地图.md           # 探索总源（含 action→api 映射），喂 p2/p3
-├── explore-report.md
-├── auto/                 # 🤖 机器/AI 执行
-│   ├── api/              # flow*.yaml（接口用例，runner 跑）
-│   ├── ui/              # ui_runner.py + s*.yaml + traceability（UI 自动化）
-│   ├── screenshots/     # explore/ + ui/
-│   └── _created.yaml     # 实体台账（清理清单）
-└── docs/                 # 👀 人读 / 人工执行
-    ├── functional-cases/ # 功能用例 md/xlsx
-    ├── ui-cases/         # UI 用例文档 md
-    ├── checklists/       # 人工校验清单（🟡DB SQL + 🔴Tier）
-    └── reports/          # 代码审计 + 执行报告
-```
-
-> **迁移状态**：`normal-work-order` 已是 auto/docs；`punish`/`complaint`/`threathunter` 仍是旧扁平布局（flow.yaml 等在模块根），后续按需迁移。**新建模块一律用 auto/docs**（`new-module.sh` 直接建好）。
-
-## 铁律
-
-1. **截图只进 `<module>/auto/screenshots/`**（explore/ 探索 + ui/ 执行），绝不倒在 `api-flows/` 根。
-2. **移动 flow/功能地图 后，同步改掉硬编码引用**：`_toolkit/upload_cases.py` 有一张 `FLOWS` 绝对路径表；runner.py / api-flow-recorder 是路径当参数传、不受影响。（教训：8/2 迁 normal-work-order 时漏改这张表导致 upload 断，已修。）
-3. 报告里图片引用一律相对路径 `../../auto/screenshots/xxx.png`（从 docs/reports/ 起算）。
-4. 新系统/模块照 `new-module.sh` 建；共享代码统一走 `_toolkit/`，不各自复制。
-5. 三桶信任模型 + 两段式断言是**每个模块的必做项**（见下），不是可选。
-6. **功能地图是唯一、活的、最终完整真源**：功能/UI/接口用例全从它派生。凡发现新逻辑——不止 CDP 探索，**代码审计/探索挖出的新接口、新守卫分支、新枚举、新状态流转，也必须回填功能地图**（不能只补进 flow yaml 就算完）。回填标出处、推断标 ⏳。终态：覆盖 页面结构 + action→api + 分支级场景，据以判断"还差哪些场景"。
+> **新建自己的模块**：在对应系统目录下参考 `risk/normal-work-order/` 的布局即可，或直接用脚手架一键生成（见快速上手）。
 
 ---
 
-## Playbook：建一套可信基线的流程
+## 前置要求
 
-### 0. 起手建骨架
+| 必须有 | 说明 |
+|---|---|
+| **Claude Code** | 本工具的引擎是 Claude Code agent 按 skill 执行，不是手敲命令 |
+| Python 3 | + `pyyaml requests websocket-client` |
+| Chrome 桌面版 | 探索阶段用持久化 profile 驱动 |
+| 测试环境账号 | 被测系统测试环境 URL + 能登录的账号 |
+
+可选但推荐：
+
+| 可选 | 用途 |
+|---|---|
+| 后端代码仓库读权限 | 做"接口↔代码分支覆盖审计"，找出 PRD 里没有的 if/枚举守卫 |
+| DB 只读权限 | 🟡 桶的 SQL 校验，没有则跳过留待人工 |
+
+---
+
+## 快速上手
+
 ```bash
-bash _toolkit/new-module.sh <系统> <模块>      # 例：risk warning-handle
+# 1. clone 本仓库
+git clone https://github.com/hzauliyanda/baseline-test.git ~/AI-TEST/api-flows
+cd ~/AI-TEST/api-flows
+
+# 2. 安装 Python 依赖
+pip3 install pyyaml requests websocket-client
+
+# 3. 配置
+cp config.example.yaml config.yaml
+# 编辑 config.yaml：填你的系统 base_url / appId / cookie_env
+
+# 4. 建你的第一个模块骨架
+bash _toolkit/new-module.sh <系统> <模块>   # 例：slop open-api
+
+# 5. 在 Claude Code 里开干
+# → "用 api-flow-recorder 探索 slop/open-api"
 ```
-建好 auto/docs 空目录 + `_meta.yaml` + 清单模板。**先填 `_meta.yaml`**：`env_url`（测试环境）、`module_base_path`、`repos.backend`。
 
-> ⚠️ **执行分两种，别混**：**冲烟自测**（边生成边跑，验用例可用 + 回填 ⏳）要**早**；**正式回归 + 出正式报告**要**晚**（用例补全后一次到位，别在不成熟用例集上出报告——否则重演"30步/136步两份报告打架"）。
-
-### 1. 生成用例（现成 skill）
-| 步 | 干啥 | skill | 产出 |
-|---|---|---|---|
-| 1 | CDP 探索，边探边写功能地图 + 抓接口串 flow.yaml | `api-flow-recorder` | 功能地图.md、auto/api/flow.yaml、_created.yaml |
-| 2 | 功能地图 → 功能测试用例（TC-ID） | `p2-test-case-generator` | docs/functional-cases/ |
-| 3 | 功能地图+功能用例 → UI 自动化用例 | `p3-ui-test-case-generator` | auto/ui/s*.yaml + traceability |
-
-> 一键串完 1→3：`ai-web-test-pipeline`（断点续跑）。skill 默认吐扁平布局，跑完收口到 auto/docs。
-
-### 2. 冲烟自测（早，不出正式报告）
-用 `p4-browser-test-runner-devtools` / `runner.py` 把生成的用例跑一遍，只为：**验选择器/登录/接口可达** + **回填两段式断言的 ⏳**（分页路径、负向真实拒绝码等只能靠真跑锁死）。这一步是开发期反馈，不是里程碑。
-
-### 3. 后端信任层 →【里程碑① 后端正式回归】
-1. **接口↔后端代码分支覆盖审计**：拉 `_meta.yaml.repos.backend` 的 controller/service，逐个 if/switch 守卫对照 flow，产出 `docs/reports/接口用例-代码分支覆盖审计-<日期>.md`，据空白补 `flow-negative/supplement/paths`。**审计挖出的新逻辑同时回填功能地图**（铁律6）。
-2. **两段式断言**（每 case）：`assert:`🟢（runner 判死，⚠️不渲染变量只静态串）+ `db_check:`🟡（真表名 SQL，runner 忽略→永不自动过）+ `skip_note:`🔴。出处标 `✅实跑确认`/`⏳待回填`；**读代码推断的码绝不写成硬 equals**。
-3. **人工校验清单**：脚本从 yaml 的 db_check/skip_note 抽 → `docs/checklists/`（🟡DB SQL + 🔴Tier1/2/3）。
-4. **【里程碑① 正式回归】**：用例补全后跑一次正式回归、出正式报告。三桶收口：🟢机器 + 🟡SQL(人工) + 🔴人工，都过才算真过。
-   > **后端别等前端**——后端到此即可独立出正式报告，不被前端阻塞。
-
-### 4. 前端线 →【里程碑② 前端+全量回归】（★git 前端代码后）
-后端做完后 UI 侧对称做——**结构已预留**：
-1. git 前端仓库后，填 `_meta.yaml.repos.frontend` / `frontend_branch`。
-2. **UI 用例↔前端代码覆盖审计**：对照前端路由/组件/交互分支/表单校验，找 UI 没覆盖的场景（弹窗时序、边界态、权限渲染、错误提示…），产出 `docs/reports/UI用例-前端代码覆盖审计-<日期>.md`。**挖出的新逻辑同样回填功能地图**（铁律6）。
-3. 补 UI 场景 → 追加 `auto/ui/s*.yaml` + 更新 `traceability.json`（UI 场景 ↔ 功能 TC-ID 追溯不断）。
-4. **【里程碑② 正式回归】**：UI 侧同样三桶（🟢断言 元素/文案/跳转 + 🟡数据副作用 SQL + 🔴视觉/时序人工），补完 UI 场景后触发一次全量正式回归。
+详细每一步的产物、规范、注意事项见 **[使用手册.md](使用手册.md)**。
 
 ---
 
-## 模块完整度现状（risk 系统）
-| 模块 | 布局 | 功能地图 | 接口用例 | UI 用例 | 人工清单 | 状态 |
-|---|---|---|---|---|---|---|
-| normal-work-order | **auto/docs** | ✅(全) | ✅ 5 flow/136 case | ✅ 9 场景 | ✅ | **满配（标杆）** |
-| punish | 扁平(待迁) | ✅ | ✅ 2 flow | ❌ | ❌ | 半配（缺 UI + 迁移） |
-| complaint | 扁平(待迁) | ✅ | ✅ 2 flow | ❌ | ❌ | 半配（缺 UI + 迁移） |
-| threathunter | 扁平(待迁) | ✅ | ✅ 1 flow | ❌ | ❌ | 半成品（仅探索） |
+## 已有模块（参考）
+
+| 系统 | 模块 | 状态 | 说明 |
+|---|---|---|---|
+| risk | normal-work-order | ★ 满配 | 5 flow / 136 接口用例 / UI 9场景 / 双轨制导入 / 人工清单 |
+| risk | complaint | 半配 | flow yaml + 功能用例，缺 UI |
+| risk | punish | 半配 | flow yaml + 功能用例，缺 UI |
+| risk | threathunter | 半成品 | 仅探索 + 1 flow |
+
+> `risk/normal-work-order/` 是最完整的参考样例，新人建议先读它的目录和 flow yaml。
+
+---
+
+## 核心概念（3 分钟）
+
+**三桶信任模型**：每条用例的结论由三类证据决定，缺一不可：
+
+```
+🟢 机器判定   接口层确定性判据（错误码 / status / 字段回读）    → runner 自动跑
+🟡 DB 兜底    接口 SUCCESS ≠ 数据落库正确，必须 SQL 人工核     → 人跑
+🔴 纯人工     跨系统联动 / 越权 / 并发 / UI 视觉               → 人做
+```
+
+**两段式断言**（写在 flow yaml 每个 step 里）：
+
+```yaml
+assert:       # 🟢 runner 唯一评分段，只放能判死的值
+  status: 200
+  json:
+    - { path: "$.code", equals: "SUCCESS" }
+
+db_check:     # 🟡 runner 忽略此段，永不自动通过，逼你人工核数据
+  - table: t_cs_issue
+    sql: "SELECT issue_status FROM t_cs_issue WHERE id=<issue_id>;"
+    expect: "issue_status=1"
+
+skip_note:    # 🔴 机器跑不了的场景，文字说明
+  - "需人工验证越权场景"
+```
+
+---
+
+## 贡献指南
+
+1. 从 `main` 拉新分支：`git checkout -b <系统>/<模块>`
+2. 用脚手架建骨架：`bash _toolkit/new-module.sh <系统> <模块>`
+3. 按 playbook 走（探索 → 出用例 → 冲烟 → 信任层 → 正式回归）
+4. **提 MR 前检查**：
+   - `config.yaml` 没有入库（`.gitignore` 已拦，确认一下）
+   - `auto/auth.json` 没有入库
+   - 功能地图已回填最新逻辑
+5. `_toolkit/` 有改动请单独说明（影响所有人）
+
+---
+
+## 相关链接
+
+- [使用手册.md](使用手册.md) — 安装 / 配置 / 日常跑回归的详细说明
+- [_toolkit/接口测试全链路方法论.md](_toolkit/接口测试全链路方法论.md) — 方法论背景
+- [risk/normal-work-order/功能地图.md](risk/normal-work-order/功能地图.md) — 满配样例的功能地图
+- [risk/normal-work-order/auto/api/FLOW2CASES.md](risk/normal-work-order/auto/api/FLOW2CASES.md) — 双轨制（本地回归 + 测试平台导入）说明
