@@ -1,0 +1,84 @@
+name: "S1-名单申请列表查询与筛选"
+base_url: "https://test-risk.inshopline.com"
+covers: ["TC-NWO-001","TC-NWO-002","TC-NWO-003","TC-NWO-005","TC-NWO-009","TC-NWO-010","TC-NWO-011"]
+
+steps:
+  # S1-01: 打开列表页
+  - action: navigate
+    url: "/risk-cooperation/cs/normal-work-order/list"
+    description: "S1-01: 导航到名单申请列表页，等待「新建工单」按钮可见"
+
+  - action: assert
+    description: "S1-02: 列表加载完成，展示工单记录，列含 工单ID/工单名称/模板类型/状态/主键值/创建人/创建时间/当前处理人/操作"
+
+  # S1-03: 按工单名称查询
+  - action: input
+    description: "S1-03: 在筛选区「工单名称」输入框(#issueName，列表筛选框)输入关键字"
+    value: "自动化测试"
+
+  - action: click
+    description: "S1-04: 点击「查询」按钮"
+
+  - action: assert
+    description: "S1-05: 列表仅展示名称含关键字的工单"
+
+  # S1-06: 处理状态筛选（antd Select 需 mousedown 打开）
+  - action: select
+    description: "S1-06: 展开「处理状态」下拉(#issueStatus，需在其 .ant-select-selector 上派发 mousedown+mouseup 打开)，选项：待审批/审批中/已驳回/已完结/待提交/已废弃，选择「待审批」"
+    value: "待审批"
+
+  - action: click
+    description: "S1-07: 点击「查询」"
+
+  - action: assert
+    description: "S1-08: 列表状态列均为「待审批」"
+
+  # S1-09: 重置
+  - action: click
+    description: "S1-09: 点击「重置」按钮"
+
+  - action: assert
+    description: "S1-10: 所有筛选项清空，列表恢复默认查询"
+
+  # S1-11: 翻页
+  - action: click
+    description: "S1-11: 点击分页「下一页」"
+
+  - action: assert
+    description: "S1-12: 列表切换到第 2 页数据"
+
+  # S1-13: 空结果
+  - action: input
+    description: "S1-13: 「工单名称」输入一个不存在的名称(如 zzzzzz-no-such)"
+    value: "zzzzzz-no-such"
+
+  - action: click
+    description: "S1-14: 点击「查询」"
+
+  - action: assert
+    description: "S1-15: 列表展示「暂无数据」空状态"
+
+human_verify:
+  - id: HV-S1-01
+    tc_ids: ["TC-NWO-001","TC-NWO-002"]
+    method: screenshot
+    description: "截图验证列表列头完整"
+    what_to_check: "截图应包含：工单ID / 工单名称 / 模板类型 / 状态 / 主键值 / 创建人 / 创建时间 / 当前处理人 / 操作，共9列；至少一行数据可见"
+
+  - id: HV-S1-02
+    tc_ids: ["TC-NWO-003","TC-NWO-005"]
+    method: network
+    description: "抓包验证筛选请求参数正确下发"
+    what_to_check: "DevTools Network → POST /mapi/cs/issue/normal/list，查看 Request Payload 中 issueName 含关键字、issueStatus='PENDING_APPROVE' 等筛选参数已携带；Response data.list 全部满足筛选条件"
+
+  - id: HV-S1-03
+    tc_ids: ["TC-NWO-009","TC-NWO-010"]
+    method: screenshot
+    description: "截图验证状态筛选结果"
+    what_to_check: "截图状态列：所有可见行 Tag 均为「待审批」颜色（warning 橙色）；重置后 Tag 多样"
+
+  - id: HV-S1-04
+    tc_ids: ["TC-NWO-011"]
+    method: screenshot
+    description: "截图验证空状态样式"
+    what_to_check: "截图应出现 antd Empty 组件（「暂无数据」文案或插图），列表无数据行"

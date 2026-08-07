@@ -1,0 +1,42 @@
+name: "S3-查看工单详情"
+base_url: "https://test-risk.inshopline.com"
+covers: ["TC-NWO-004","TC-NWO-022","TC-NWO-023","TC-NWO-024"]
+depends_on: ["S2"]
+
+steps:
+  - action: navigate
+    url: "/risk-cooperation/cs/normal-work-order/list"
+    description: "S3-01: 导航到名单申请列表页"
+
+  - action: click
+    description: "S3-02: 在 S2 创建的 [FLOW] 工单行，点击「查看」(表格行内 a 文案)"
+
+  - action: assert
+    description: "S3-03: 跳转到 /list/detail/{id}，面包屑显示「名单申请 / 工单详情」"
+
+  - action: assert
+    description: "S3-04: 基础信息展示 工单名称、工单模板、模板说明（GET /mapi/cs/issue/normal/{id}）"
+
+  - action: assert
+    description: "S3-05: 审批信息按模板字段渲染（文本/图片/文件/枚举等 fieldValues）"
+
+  - action: assert
+    description: "S3-06: 审核进程时间线展示「创建工单」节点(创建人/时间)"
+
+human_verify:
+  - id: HV-S3-01
+    tc_ids: ["TC-NWO-004","TC-NWO-022"]
+    method: screenshot
+    description: "截图验证详情页完整内容"
+    what_to_check: "截图含：面包屑「名单申请 / 工单详情」；基础信息区有工单名称「[FLOW]UI自动化_新建单」；右侧进程时间线有「创建工单」节点含创建人 liyanda 和时间戳"
+
+  - id: HV-S3-02
+    tc_ids: ["TC-NWO-023","TC-NWO-024"]
+    method: sql
+    description: "SQL 验证详情接口数据与库一致"
+    sql: |
+      SELECT issue_id, issue_name, issue_status, issue_config_id, apply_desc
+      FROM t_cs_issue
+      WHERE issue_name = '[FLOW]UI自动化_新建单'
+      ORDER BY created_at DESC LIMIT 1;
+    expected: "页面展示的工单名称、模板名称与库中记录一致；issue_status='PENDING_APPROVE'"

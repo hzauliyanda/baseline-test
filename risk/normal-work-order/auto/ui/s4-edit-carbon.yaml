@@ -1,0 +1,58 @@
+name: "S4-编辑抄送名单"
+base_url: "https://test-risk.inshopline.com"
+covers: ["TC-NWO-026","TC-NWO-027"]
+depends_on: ["S2"]
+
+steps:
+  - action: navigate
+    url: "/risk-cooperation/cs/normal-work-order/list"
+    description: "S4-01: 导航到名单申请列表页"
+
+  - action: click
+    description: "S4-02: 点击 S2 创建的 [FLOW] 工单行的「查看」进入详情"
+
+  - action: click
+    description: "S4-03: 点击详情页「编辑」按钮(进入内联编辑态，仅抄送人邮箱可改)"
+
+  - action: assert
+    description: "S4-04: 出现抄送人邮箱输入框(原值 liyanda@shoplineapp.com)与「确定/取消」按钮"
+
+  - action: input
+    description: "S4-05: 修改抄送人邮箱为 flow-edit@shoplineapp.com(真实键盘输入)"
+    value: "flow-edit@shoplineapp.com"
+
+  - action: click
+    description: "S4-06: 点击「确定」保存"
+
+  - action: assert
+    description: "S4-07: 保存成功(POST /mapi/cs/issue/normal/edit 返回 SUCCESS)，详情刷新，抄送名单更新"
+
+  # 取消场景
+  - action: click
+    description: "S4-08: 再次点「编辑」，改邮箱后点「取消」"
+
+  - action: assert
+    description: "S4-09: 退出编辑态，抄送人恢复原值，未调用 edit 接口"
+
+human_verify:
+  - id: HV-S4-01
+    tc_ids: ["TC-NWO-026"]
+    method: screenshot
+    description: "截图验证抄送人更新成功"
+    what_to_check: "步骤 S4-07 后截图：详情页「抄送名单」行展示 flow-edit@shoplineapp.com，已退出编辑态（无 Input 框）"
+
+  - id: HV-S4-02
+    tc_ids: ["TC-NWO-026"]
+    method: sql
+    description: "SQL 验证抄送人写库"
+    sql: |
+      SELECT carbon_list FROM t_cs_issue
+      WHERE issue_name = '[FLOW]UI自动化_新建单'
+      ORDER BY created_at DESC LIMIT 1;
+    expected: "carbon_list 字段中包含 flow-edit@shoplineapp.com"
+
+  - id: HV-S4-03
+    tc_ids: ["TC-NWO-027"]
+    method: network
+    description: "抓包验证取消不调接口"
+    what_to_check: "步骤 S4-08~09 期间，DevTools Network 中不存在新增的 POST /mapi/cs/issue/normal/edit 请求；或确认最后一次 edit 请求是 S4-06 的那次"

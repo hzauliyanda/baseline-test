@@ -1,0 +1,126 @@
+name: risk-complaint-crud
+desc: 外部投诉工单(complaint)全链路：创建→详情→列表→编辑→下发→备注→无需下发→删除。complaint=IssueType:PUNISH/SubIssueType:COMPLAINT，下发复用 punish 路由。
+base_url: https://test-risk.inshopline.com
+
+variables:
+  cookie: "{{ENV:RISK_COOKIE}}"
+  issue_config_id: "186"              # 外部投诉工单配置
+  issue_config_name: "外部投诉工单"
+  # run_id 执行器自动注入
+
+steps:
+  # 1. 创建（→状态5待下发）
+  - id: create
+    desc: "POST /complaints 创建投诉工单（issueConfigId+issueName+riskType+complaintSource 必填）"
+    request:
+      method: POST
+      url: "{{base_url}}/mapi/cs/issue/complaints"
+      headers: { appId: "4", version: "v2", Content-Type: "application/json", Cookie: "{{cookie}}" }
+      json:
+        issueConfigId: "{{issue_config_id}}"
+        issueConfigName: "{{issue_config_name}}"
+        issueName: "[FLOW]complaint_{{run_id}}"
+        riskType: "假冒商品"
+        complaintSource: "Other"
+        complaintTheme: "自动化测试"
+        complaintName: "tester"
+        complaintContact: "test@shoplineapp.com"
+    extract:
+      issue_id: "$.data"
+    assert:
+      status: 200
+      json:
+        - { path: "$.code", equals: "SUCCESS" }
+        - { path: "$.data", exists: true }
+
+  # 2. 详情（取字符串 issueId）
+  - id: detail
+    desc: "GET /complaints/:id 详情（状态=5待下发）"
+    request:
+      method: GET
+      url: "{{base_url}}/mapi/cs/issue/complaints/{{issue_id}}"
+      headers: { appId: "4", version: "v2", Cookie: "{{cookie}}" }
+    extract:
+      issue_id: "$.data.issueId"
+    assert:
+      status: 200
+      json:
+        - { path: "$.code", equals: "SUCCESS" }
+        - { path: "$.data.issueStatus", equals: "5" }
+
+  # 3. 列表
+  - id: list
+    desc: "POST /complaints/pageable 列表（管理员看全量）"
+    request:
+      method: POST
+      url: "{{base_url}}/mapi/cs/issue/complaints/pageable"
+      headers: { appId: "4", version: "v2", Content-Type: "application/json", Cookie: "{{cookie}}" }
+      json: { pageNum: 1, pageSize: 10 }
+    assert:
+      status: 200
+      json: [{ path: "$.code", equals: "SUCCESS" }]
+
+  # 4. 编辑（仅状态5可改）
+  - id: edit
+    desc: "PUT /complaints/:id 编辑（状态5时可改，Version+1）"
+    request:
+      method: PUT
+      url: "{{base_url}}/mapi/cs/issue/complaints/{{issue_id}}"
+      headers: { appId: "4", version: "v2", Content-Type: "application/json", Cookie: "{{cookie}}" }
+      json:
+        issueName: "[FLOW]complaint_edit_{{run_id}}"
+        complaintTheme: "编辑后主题"
+    assert:
+      status: 200
+      json: [{ path: "$.code", equals: "SUCCESS" }]
+
+  # 5. 下发（5→6标注中，复用 punish 路由）
+  - id: deliver
+    desc: "POST /issue/punish/deliver 下发（5→6，写 MarkDeadline/DeliverRemark，发邮件+企微）"
+    request:
+      method: POST
+      url: "{{base_url}}/mapi/cs/issue/punish/deliver"
+      headers: { appId: "4", version: "v2", Content-Type: "application/json", Cookie: "{{cookie}}" }
+      json:
+        issueId: "{{issue_id}}"
+        markDeadline: 1893456000000
+        notifyRecipientIdList: ["84", "75"]
+        remark: "自动化下发"
+    assert:
+      status: 200
+      json: [{ path: "$.code", equals: "SUCCESS" }]
+
+  # 6. 风控备注（仅状态6可改 FollowRemark）
+  - id: remark
+    desc: "POST /complaints/remark 风控备注（状态6时可改）"
+    request:
+      method: POST
+      url: "{{base_url}}/mapi/cs/issue/complaints/remark"
+      headers: { appId: "4", version: "v2", Content-Type: "application/json", Cookie: "{{cookie}}" }
+      json: { issueId: "{{issue_id}}", remark: "自动化风控备注" }
+    assert:
+      status: 200
+      json: [{ path: "$.code", equals: "SUCCESS" }]
+
+  # 7. 无需下发（6→11）
+  - id: not_deliver
+    desc: "POST /issue/punish/not-deliver 无需下发（6→11）"
+    request:
+      method: POST
+      url: "{{base_url}}/mapi/cs/issue/punish/not-deliver"
+      headers: { appId: "4", version: "v2", Content-Type: "application/json", Cookie: "{{cookie}}" }
+      json: { issueId: "{{issue_id}}" }
+    assert:
+      status: 200
+      json: [{ path: "$.code", equals: "SUCCESS" }]
+
+  # 8. 删除（清理，admin 可删任意状态）
+  - id: delete
+    desc: "DELETE /issue/base/:id 删除工单（清理）"
+    request:
+      method: DELETE
+      url: "{{base_url}}/mapi/cs/issue/base/{{issue_id}}"
+      headers: { appId: "4", version: "v2", Cookie: "{{cookie}}" }
+    assert:
+      status: 200
+      json: [{ path: "$.code", equals: "SUCCESS" }]

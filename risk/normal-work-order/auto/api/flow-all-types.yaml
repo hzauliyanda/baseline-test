@@ -1,0 +1,836 @@
+# 断言两段式（key 存在=分桶，runner 无需改）：
+#   assert:   🟢机器判定段（runner 唯一评分：status/$.code/静态 contains/exists；不渲染 {{var}}）
+#   db_check: 🟡DB兜底段（runner 忽略→永不自动通过；真表名真列名 SQL，<..._wo_id>/<run_id> 执行时替换）
+#   note:     ⏳待首跑回填 / 🔴需人工确认 的提示（runner 忽略）
+# 期望只锁到接口结构安全层；改数据的 step 真伪一律靠 db_check 的 SQL 人工看。
+# schema 来自 <repo>/model/cs/... 已核实：t_cs_issue / t_cs_issue_field_value / t_cs_issue_config。
+
+name: risk-normal-work-order-all-types
+desc: 普通工单 5 种 subIssueType 全枚举覆盖：每类型建专属模板→建工单(真实主键)→审批完结→清理
+base_url: https://test-risk.inshopline.com
+variables:
+  cookie: '{{ENV:RISK_COOKIE}}'
+steps:
+- id: other_tpl_save
+  desc: '[OTHER] 建专属模板'
+  request:
+    method: POST
+    url: '{{base_url}}/mapi/cs/issue/config/save'
+    headers: &id001
+      appId: '4'
+      version: v2
+      Cookie: '{{cookie}}'
+      Content-Type: application/json
+    json:
+      issueConfigName: '[FLOW]TPL_OTHER_{{run_id}}'
+      issueConfigDesc: 多类型模板
+      subIssueType: OTHER
+      primaryKeyConfig:
+      - name: storeHandle
+      materialsConfig:
+      - name: 说明
+        isNotNull: 'no'
+        inputType: TEXT
+        materialsDesc: d
+      approvalConfigs: &id002
+      - step: 1
+        type: SINGLE
+        approvalList:
+        - '253'
+      isWriteQualification: 0
+      isAppointMonth: 0
+  assert:
+    status: 200
+    json:
+    - path: $.code
+      equals: SUCCESS
+  db_check:
+  - table: t_cs_issue_config
+    sql: SELECT id, sub_issue_type, deleted_at FROM t_cs_issue_config WHERE issue_config_name='[FLOW]TPL_OTHER_<run_id>' ORDER BY id DESC LIMIT 1;
+    expect: 1 行；sub_issue_type 对应 OTHER；deleted_at=0
+    reason: 模板真的建进 t_cs_issue_config（config/save 只回 SUCCESS，configId 靠下一步 list 查回）
+  note: ⏳ sub_issue_type 在库里的确切存储值(OTHER 还是无下划线写法)首跑确认一次
+- id: other_tpl_find
+  desc: '[OTHER] list 查回 configId'
+  request:
+    method: POST
+    url: '{{base_url}}/mapi/cs/issue/config/list'
+    headers: *id001
+    json:
+      pageNum: 1
+      pageSize: 5
+      issueConfigName: '[FLOW]TPL_OTHER_{{run_id}}'
+  extract:
+    other_tpl_id: $.data.list[0].issueConfigId
+  assert:
+    status: 200
+    json:
+    - path: $.code
+      equals: SUCCESS
+    - path: $.data.list[0].issueConfigId
+      exists: true
+  note: ⏳ 分页响应体路径 data.list[] 首跑确认（与 config/list 真实结构对齐）
+- id: other_wo_save
+  desc: '[OTHER] 用模板+真实主键建工单'
+  request:
+    method: POST
+    url: '{{base_url}}/mapi/cs/issue/normal/save'
+    headers: *id001
+    json:
+      submitType: ADD
+      issueName: '[FLOW]WO_OTHER_{{run_id}}'
+      applyDesc: 多类型流程
+      issueConfigId: '{{other_tpl_id}}'
+      approvalConfig: *id002
+      carbonList:
+      - liyanda@shoplineapp.com
+      materialsConfig:
+      - fieldName: 说明
+        fieldValue: 测试
+      primaryKeyConfig:
+      - fieldName: storeHandle
+        fieldInputType: TEXT
+        fieldValue:
+        - liyanda6
+  extract:
+    other_wo_id: $.data
+  assert:
+    status: 200
+    json:
+    - path: $.code
+      equals: SUCCESS
+    - path: $.data
+      exists: true
+  db_check:
+  - table: t_cs_issue
+    sql: SELECT issue_status, deleted_at FROM t_cs_issue WHERE id=<other_wo_id>;
+    expect: 1 行；issue_status=1(待审批)；deleted_at=0
+    reason: 工单主表真建了一条待审批工单
+  - table: t_cs_issue_field_value
+    sql: SELECT field_value FROM t_cs_issue_field_value WHERE issue_id=<other_wo_id> AND field_type='PRIMARY' AND field_name='storeHandle' AND deleted_at=0;
+    expect: field_value = 'liyanda6'（非空！）
+    reason: '缺陷1: 空主键会被静默存成 '''' 而非报错；入参非空必须回读到真值，否则=主键丢失脏单'
+- id: other_wo_detail
+  desc: '[OTHER] 详情取字符串 issueId'
+  request:
+    method: GET
+    url: '{{base_url}}/mapi/cs/issue/normal/{{other_wo_id}}'
+    headers: &id003
+      appId: '4'
+      version: v2
+      Cookie: '{{cookie}}'
+  extract:
+    other_wo_id: $.data.issueId
+  assert:
+    status: 200
+    json:
+    - path: $.code
+      equals: SUCCESS
+    - path: $.data.issueName
+      contains: '[FLOW]'
+- id: other_approve
+  desc: '[OTHER] 审批通过→完结(名单类触发同步)'
+  request:
+    method: POST
+    url: '{{base_url}}/mapi/cs/issue/normal/approve'
+    headers: *id001
+    json:
+      issueId: '{{other_wo_id}}'
+      approveStatus: SUCCESS
+      approveDesc: 多类型审批
+  assert:
+    status: 200
+    json:
+    - path: $.code
+      equals: SUCCESS
+  db_check:
+  - table: t_cs_issue
+    sql: SELECT issue_status, current_approve_step_status FROM t_cs_issue WHERE id=<other_wo_id>;
+    expect: issue_status=3(已完结)；current_approve_step_status='SUCCESS'
+    reason: 单级 SINGLE 审批通过后工单是否真流转到已完结（SUCCESS≠状态真变）
+- id: other_wo_del
+  desc: '[OTHER] 清理工单'
+  request:
+    method: DELETE
+    url: '{{base_url}}/mapi/cs/issue/base/{{other_wo_id}}'
+    headers: *id003
+  assert:
+    status: 200
+    json:
+    - path: $.code
+      equals: SUCCESS
+  db_check:
+  - table: t_cs_issue
+    sql: SELECT deleted_at FROM t_cs_issue WHERE id=<other_wo_id>;
+    expect: deleted_at != 0（软删；行仍在只是标了删除时间戳，非物删）
+    reason: 确认删除=软删且真生效
+- id: other_tpl_del
+  desc: '[OTHER] 清理模板'
+  request:
+    method: DELETE
+    url: '{{base_url}}/mapi/cs/issue/config/{{other_tpl_id}}'
+    headers: *id003
+  assert:
+    status: 200
+    json:
+    - path: $.code
+      equals: SUCCESS
+  db_check:
+  - table: t_cs_issue_config
+    sql: SELECT deleted_at FROM t_cs_issue_config WHERE issue_config_name='[FLOW]TPL_OTHER_<run_id>' ORDER BY id DESC LIMIT 1;
+    expect: deleted_at != 0（模板软删生效）
+    reason: 确认模板真被删（清理动作生效，避免残留脏模板）
+- id: apply_tpl_save
+  desc: '[NAME_LIST_APPLY] 建专属模板'
+  request:
+    method: POST
+    url: '{{base_url}}/mapi/cs/issue/config/save'
+    headers: *id001
+    json:
+      issueConfigName: '[FLOW]TPL_NAME_LIST_APPLY_{{run_id}}'
+      issueConfigDesc: 多类型模板
+      subIssueType: NAME_LIST_APPLY
+      primaryKeyConfig:
+      - name: merchantId
+      - name: merchantName
+      - name: storeHandle
+      materialsConfig:
+      - name: 说明
+        isNotNull: 'no'
+        inputType: TEXT
+        materialsDesc: d
+      approvalConfigs: *id002
+      isWriteQualification: 0
+      isAppointMonth: 0
+      nameListConfig:
+      - primaryKeyField: merchantId
+        namelistCode: SLM00304
+  assert:
+    status: 200
+    json:
+    - path: $.code
+      equals: SUCCESS
+  db_check:
+  - table: t_cs_issue_config
+    sql: SELECT id, sub_issue_type, deleted_at FROM t_cs_issue_config WHERE issue_config_name='[FLOW]TPL_NAME_LIST_APPLY_<run_id>' ORDER BY id DESC LIMIT 1;
+    expect: 1 行；sub_issue_type 对应 NAME_LIST_APPLY；deleted_at=0
+    reason: 模板真的建进 t_cs_issue_config（config/save 只回 SUCCESS，configId 靠下一步 list 查回）
+  note: ⏳ sub_issue_type 在库里的确切存储值(NAME_LIST_APPLY 还是无下划线写法)首跑确认一次
+- id: apply_tpl_find
+  desc: '[NAME_LIST_APPLY] list 查回 configId'
+  request:
+    method: POST
+    url: '{{base_url}}/mapi/cs/issue/config/list'
+    headers: *id001
+    json:
+      pageNum: 1
+      pageSize: 5
+      issueConfigName: '[FLOW]TPL_NAME_LIST_APPLY_{{run_id}}'
+  extract:
+    apply_tpl_id: $.data.list[0].issueConfigId
+  assert:
+    status: 200
+    json:
+    - path: $.code
+      equals: SUCCESS
+    - path: $.data.list[0].issueConfigId
+      exists: true
+  note: ⏳ 分页响应体路径 data.list[] 首跑确认（与 config/list 真实结构对齐）
+- id: apply_wo_save
+  desc: '[NAME_LIST_APPLY] 用模板+真实主键建工单'
+  request:
+    method: POST
+    url: '{{base_url}}/mapi/cs/issue/normal/save'
+    headers: *id001
+    json:
+      submitType: ADD
+      issueName: '[FLOW]WO_NAME_LIST_APPLY_{{run_id}}'
+      applyDesc: 多类型流程
+      issueConfigId: '{{apply_tpl_id}}'
+      approvalConfig: *id002
+      carbonList:
+      - liyanda@shoplineapp.com
+      materialsConfig:
+      - fieldName: 说明
+        fieldValue: 测试
+      primaryKeyConfig:
+      - fieldName: merchantId
+        fieldInputType: TEXT
+        fieldValue:
+        - li0106@123.com
+  extract:
+    apply_wo_id: $.data
+  assert:
+    status: 200
+    json:
+    - path: $.code
+      equals: SUCCESS
+    - path: $.data
+      exists: true
+  db_check:
+  - table: t_cs_issue
+    sql: SELECT issue_status, deleted_at FROM t_cs_issue WHERE id=<apply_wo_id>;
+    expect: 1 行；issue_status=1(待审批)；deleted_at=0
+    reason: 工单主表真建了一条待审批工单
+  - table: t_cs_issue_field_value
+    sql: SELECT field_value FROM t_cs_issue_field_value WHERE issue_id=<apply_wo_id> AND field_type='PRIMARY' AND field_name='merchantId' AND deleted_at=0;
+    expect: field_value = 'li0106@123.com'（非空！）
+    reason: '缺陷1: 空主键会被静默存成 '''' 而非报错；入参非空必须回读到真值，否则=主键丢失脏单'
+- id: apply_wo_detail
+  desc: '[NAME_LIST_APPLY] 详情取字符串 issueId'
+  request:
+    method: GET
+    url: '{{base_url}}/mapi/cs/issue/normal/{{apply_wo_id}}'
+    headers: *id003
+  extract:
+    apply_wo_id: $.data.issueId
+  assert:
+    status: 200
+    json:
+    - path: $.code
+      equals: SUCCESS
+    - path: $.data.issueName
+      contains: '[FLOW]'
+- id: apply_approve
+  desc: '[NAME_LIST_APPLY] 审批通过→完结(名单类触发同步)'
+  request:
+    method: POST
+    url: '{{base_url}}/mapi/cs/issue/normal/approve'
+    headers: *id001
+    json:
+      issueId: '{{apply_wo_id}}'
+      approveStatus: SUCCESS
+      approveDesc: 多类型审批
+  assert:
+    status: 200
+    json:
+    - path: $.code
+      equals: SUCCESS
+  db_check:
+  - table: t_cs_issue
+    sql: SELECT issue_status, current_approve_step_status FROM t_cs_issue WHERE id=<apply_wo_id>;
+    expect: issue_status=3(已完结)；current_approve_step_status='SUCCESS'
+    reason: 单级 SINGLE 审批通过后工单是否真流转到已完结（SUCCESS≠状态真变）
+  note: 🔴 名单类审批完结后是否真写/剔名单库(跨系统 BatchAddWords/DeleteWords)——接口判不了，人工确认，见手动覆盖清单.md
+- id: apply_wo_del
+  desc: '[NAME_LIST_APPLY] 清理工单'
+  request:
+    method: DELETE
+    url: '{{base_url}}/mapi/cs/issue/base/{{apply_wo_id}}'
+    headers: *id003
+  assert:
+    status: 200
+    json:
+    - path: $.code
+      equals: SUCCESS
+  db_check:
+  - table: t_cs_issue
+    sql: SELECT deleted_at FROM t_cs_issue WHERE id=<apply_wo_id>;
+    expect: deleted_at != 0（软删；行仍在只是标了删除时间戳，非物删）
+    reason: 确认删除=软删且真生效
+- id: apply_tpl_del
+  desc: '[NAME_LIST_APPLY] 清理模板'
+  request:
+    method: DELETE
+    url: '{{base_url}}/mapi/cs/issue/config/{{apply_tpl_id}}'
+    headers: *id003
+  assert:
+    status: 200
+    json:
+    - path: $.code
+      equals: SUCCESS
+  db_check:
+  - table: t_cs_issue_config
+    sql: SELECT deleted_at FROM t_cs_issue_config WHERE issue_config_name='[FLOW]TPL_NAME_LIST_APPLY_<run_id>' ORDER BY id DESC LIMIT 1;
+    expect: deleted_at != 0（模板软删生效）
+    reason: 确认模板真被删（清理动作生效，避免残留脏模板）
+- id: delete_tpl_save
+  desc: '[NAME_LIST_DELETE] 建专属模板'
+  request:
+    method: POST
+    url: '{{base_url}}/mapi/cs/issue/config/save'
+    headers: *id001
+    json:
+      issueConfigName: '[FLOW]TPL_NAME_LIST_DELETE_{{run_id}}'
+      issueConfigDesc: 多类型模板
+      subIssueType: NAME_LIST_DELETE
+      primaryKeyConfig:
+      - name: merchantId
+      materialsConfig:
+      - name: 说明
+        isNotNull: 'no'
+        inputType: TEXT
+        materialsDesc: d
+      approvalConfigs: *id002
+      isWriteQualification: 0
+      isAppointMonth: 0
+      nameListConfig:
+      - primaryKeyField: merchantId
+        namelistCode: SLM00304
+  assert:
+    status: 200
+    json:
+    - path: $.code
+      equals: SUCCESS
+  db_check:
+  - table: t_cs_issue_config
+    sql: SELECT id, sub_issue_type, deleted_at FROM t_cs_issue_config WHERE issue_config_name='[FLOW]TPL_NAME_LIST_DELETE_<run_id>' ORDER BY id DESC LIMIT 1;
+    expect: 1 行；sub_issue_type 对应 NAME_LIST_DELETE；deleted_at=0
+    reason: 模板真的建进 t_cs_issue_config（config/save 只回 SUCCESS，configId 靠下一步 list 查回）
+  note: ⏳ sub_issue_type 在库里的确切存储值(NAME_LIST_DELETE 还是无下划线写法)首跑确认一次
+- id: delete_tpl_find
+  desc: '[NAME_LIST_DELETE] list 查回 configId'
+  request:
+    method: POST
+    url: '{{base_url}}/mapi/cs/issue/config/list'
+    headers: *id001
+    json:
+      pageNum: 1
+      pageSize: 5
+      issueConfigName: '[FLOW]TPL_NAME_LIST_DELETE_{{run_id}}'
+  extract:
+    delete_tpl_id: $.data.list[0].issueConfigId
+  assert:
+    status: 200
+    json:
+    - path: $.code
+      equals: SUCCESS
+    - path: $.data.list[0].issueConfigId
+      exists: true
+  note: ⏳ 分页响应体路径 data.list[] 首跑确认（与 config/list 真实结构对齐）
+- id: delete_wo_save
+  desc: '[NAME_LIST_DELETE] 用模板+真实主键建工单'
+  request:
+    method: POST
+    url: '{{base_url}}/mapi/cs/issue/normal/save'
+    headers: *id001
+    json:
+      submitType: ADD
+      issueName: '[FLOW]WO_NAME_LIST_DELETE_{{run_id}}'
+      applyDesc: 多类型流程
+      issueConfigId: '{{delete_tpl_id}}'
+      approvalConfig: *id002
+      carbonList:
+      - liyanda@shoplineapp.com
+      materialsConfig:
+      - fieldName: 说明
+        fieldValue: 测试
+      primaryKeyConfig:
+      - fieldName: merchantId
+        fieldInputType: TEXT
+        fieldValue:
+        - li0106@123.com
+  extract:
+    delete_wo_id: $.data
+  assert:
+    status: 200
+    json:
+    - path: $.code
+      equals: SUCCESS
+    - path: $.data
+      exists: true
+  db_check:
+  - table: t_cs_issue
+    sql: SELECT issue_status, deleted_at FROM t_cs_issue WHERE id=<delete_wo_id>;
+    expect: 1 行；issue_status=1(待审批)；deleted_at=0
+    reason: 工单主表真建了一条待审批工单
+  - table: t_cs_issue_field_value
+    sql: SELECT field_value FROM t_cs_issue_field_value WHERE issue_id=<delete_wo_id> AND field_type='PRIMARY' AND field_name='merchantId' AND deleted_at=0;
+    expect: field_value = 'li0106@123.com'（非空！）
+    reason: '缺陷1: 空主键会被静默存成 '''' 而非报错；入参非空必须回读到真值，否则=主键丢失脏单'
+- id: delete_wo_detail
+  desc: '[NAME_LIST_DELETE] 详情取字符串 issueId'
+  request:
+    method: GET
+    url: '{{base_url}}/mapi/cs/issue/normal/{{delete_wo_id}}'
+    headers: *id003
+  extract:
+    delete_wo_id: $.data.issueId
+  assert:
+    status: 200
+    json:
+    - path: $.code
+      equals: SUCCESS
+    - path: $.data.issueName
+      contains: '[FLOW]'
+- id: delete_approve
+  desc: '[NAME_LIST_DELETE] 审批通过→完结(名单类触发同步)'
+  request:
+    method: POST
+    url: '{{base_url}}/mapi/cs/issue/normal/approve'
+    headers: *id001
+    json:
+      issueId: '{{delete_wo_id}}'
+      approveStatus: SUCCESS
+      approveDesc: 多类型审批
+  assert:
+    status: 200
+    json:
+    - path: $.code
+      equals: SUCCESS
+  db_check:
+  - table: t_cs_issue
+    sql: SELECT issue_status, current_approve_step_status FROM t_cs_issue WHERE id=<delete_wo_id>;
+    expect: issue_status=3(已完结)；current_approve_step_status='SUCCESS'
+    reason: 单级 SINGLE 审批通过后工单是否真流转到已完结（SUCCESS≠状态真变）
+  note: 🔴 名单类审批完结后是否真写/剔名单库(跨系统 BatchAddWords/DeleteWords)——接口判不了，人工确认，见手动覆盖清单.md
+- id: delete_wo_del
+  desc: '[NAME_LIST_DELETE] 清理工单'
+  request:
+    method: DELETE
+    url: '{{base_url}}/mapi/cs/issue/base/{{delete_wo_id}}'
+    headers: *id003
+  assert:
+    status: 200
+    json:
+    - path: $.code
+      equals: SUCCESS
+  db_check:
+  - table: t_cs_issue
+    sql: SELECT deleted_at FROM t_cs_issue WHERE id=<delete_wo_id>;
+    expect: deleted_at != 0（软删；行仍在只是标了删除时间戳，非物删）
+    reason: 确认删除=软删且真生效
+- id: delete_tpl_del
+  desc: '[NAME_LIST_DELETE] 清理模板'
+  request:
+    method: DELETE
+    url: '{{base_url}}/mapi/cs/issue/config/{{delete_tpl_id}}'
+    headers: *id003
+  assert:
+    status: 200
+    json:
+    - path: $.code
+      equals: SUCCESS
+  db_check:
+  - table: t_cs_issue_config
+    sql: SELECT deleted_at FROM t_cs_issue_config WHERE issue_config_name='[FLOW]TPL_NAME_LIST_DELETE_<run_id>' ORDER BY id DESC LIMIT 1;
+    expect: deleted_at != 0（模板软删生效）
+    reason: 确认模板真被删（清理动作生效，避免残留脏模板）
+- id: onboard_tpl_save
+  desc: '[MERCHANT_ONBOARDING] 建专属模板'
+  request:
+    method: POST
+    url: '{{base_url}}/mapi/cs/issue/config/save'
+    headers: *id001
+    json:
+      issueConfigName: '[FLOW]TPL_MERCHANT_ONBOARDING_{{run_id}}'
+      issueConfigDesc: 多类型模板
+      subIssueType: MERCHANT_ONBOARDING
+      primaryKeyConfig:
+      - name: merchantId
+      - name: merchantName
+      materialsConfig:
+      - name: 说明
+        isNotNull: 'no'
+        inputType: TEXT
+        materialsDesc: d
+      approvalConfigs: *id002
+      isWriteQualification: 0
+      isAppointMonth: 0
+      nameListConfig:
+      - primaryKeyField: merchantId
+        namelistCode: SLM00304
+  assert:
+    status: 200
+    json:
+    - path: $.code
+      equals: SUCCESS
+  db_check:
+  - table: t_cs_issue_config
+    sql: SELECT id, sub_issue_type, deleted_at FROM t_cs_issue_config WHERE issue_config_name='[FLOW]TPL_MERCHANT_ONBOARDING_<run_id>' ORDER BY id DESC LIMIT 1;
+    expect: 1 行；sub_issue_type 对应 MERCHANT_ONBOARDING；deleted_at=0
+    reason: 模板真的建进 t_cs_issue_config（config/save 只回 SUCCESS，configId 靠下一步 list 查回）
+  note: ⏳ sub_issue_type 在库里的确切存储值(MERCHANT_ONBOARDING 还是无下划线写法)首跑确认一次
+- id: onboard_tpl_find
+  desc: '[MERCHANT_ONBOARDING] list 查回 configId'
+  request:
+    method: POST
+    url: '{{base_url}}/mapi/cs/issue/config/list'
+    headers: *id001
+    json:
+      pageNum: 1
+      pageSize: 5
+      issueConfigName: '[FLOW]TPL_MERCHANT_ONBOARDING_{{run_id}}'
+  extract:
+    onboard_tpl_id: $.data.list[0].issueConfigId
+  assert:
+    status: 200
+    json:
+    - path: $.code
+      equals: SUCCESS
+    - path: $.data.list[0].issueConfigId
+      exists: true
+  note: ⏳ 分页响应体路径 data.list[] 首跑确认（与 config/list 真实结构对齐）
+- id: onboard_wo_save
+  desc: '[MERCHANT_ONBOARDING] 用模板+真实主键建工单'
+  request:
+    method: POST
+    url: '{{base_url}}/mapi/cs/issue/normal/save'
+    headers: *id001
+    json:
+      submitType: ADD
+      issueName: '[FLOW]WO_MERCHANT_ONBOARDING_{{run_id}}'
+      applyDesc: 多类型流程
+      issueConfigId: '{{onboard_tpl_id}}'
+      approvalConfig: *id002
+      carbonList:
+      - liyanda@shoplineapp.com
+      materialsConfig:
+      - fieldName: 说明
+        fieldValue: 测试
+      primaryKeyConfig:
+      - fieldName: merchantId
+        fieldInputType: TEXT
+        fieldValue:
+        - li0106@123.com
+      merchantName: 739166802@qq.com
+  extract:
+    onboard_wo_id: $.data
+  assert:
+    status: 200
+    json:
+    - path: $.code
+      equals: SUCCESS
+    - path: $.data
+      exists: true
+  db_check:
+  - table: t_cs_issue
+    sql: SELECT issue_status, deleted_at FROM t_cs_issue WHERE id=<onboard_wo_id>;
+    expect: 1 行；issue_status=1(待审批)；deleted_at=0
+    reason: 工单主表真建了一条待审批工单
+  - table: t_cs_issue_field_value
+    sql: SELECT field_value FROM t_cs_issue_field_value WHERE issue_id=<onboard_wo_id> AND field_type='PRIMARY' AND field_name='merchantId' AND deleted_at=0;
+    expect: field_value = 'li0106@123.com'（非空！）
+    reason: '缺陷1: 空主键会被静默存成 '''' 而非报错；入参非空必须回读到真值，否则=主键丢失脏单'
+- id: onboard_wo_detail
+  desc: '[MERCHANT_ONBOARDING] 详情取字符串 issueId'
+  request:
+    method: GET
+    url: '{{base_url}}/mapi/cs/issue/normal/{{onboard_wo_id}}'
+    headers: *id003
+  extract:
+    onboard_wo_id: $.data.issueId
+  assert:
+    status: 200
+    json:
+    - path: $.code
+      equals: SUCCESS
+    - path: $.data.issueName
+      contains: '[FLOW]'
+- id: onboard_approve
+  desc: '[MERCHANT_ONBOARDING] 审批通过→完结(名单类触发同步)'
+  request:
+    method: POST
+    url: '{{base_url}}/mapi/cs/issue/normal/approve'
+    headers: *id001
+    json:
+      issueId: '{{onboard_wo_id}}'
+      approveStatus: SUCCESS
+      approveDesc: 多类型审批
+  assert:
+    status: 200
+    json:
+    - path: $.code
+      equals: SUCCESS
+  db_check:
+  - table: t_cs_issue
+    sql: SELECT issue_status, current_approve_step_status FROM t_cs_issue WHERE id=<onboard_wo_id>;
+    expect: issue_status=3(已完结)；current_approve_step_status='SUCCESS'
+    reason: 单级 SINGLE 审批通过后工单是否真流转到已完结（SUCCESS≠状态真变）
+  note: 🔴 名单类审批完结后是否真写/剔名单库(跨系统 BatchAddWords/DeleteWords)——接口判不了，人工确认，见手动覆盖清单.md
+- id: onboard_wo_del
+  desc: '[MERCHANT_ONBOARDING] 清理工单'
+  request:
+    method: DELETE
+    url: '{{base_url}}/mapi/cs/issue/base/{{onboard_wo_id}}'
+    headers: *id003
+  assert:
+    status: 200
+    json:
+    - path: $.code
+      equals: SUCCESS
+  db_check:
+  - table: t_cs_issue
+    sql: SELECT deleted_at FROM t_cs_issue WHERE id=<onboard_wo_id>;
+    expect: deleted_at != 0（软删；行仍在只是标了删除时间戳，非物删）
+    reason: 确认删除=软删且真生效
+- id: onboard_tpl_del
+  desc: '[MERCHANT_ONBOARDING] 清理模板'
+  request:
+    method: DELETE
+    url: '{{base_url}}/mapi/cs/issue/config/{{onboard_tpl_id}}'
+    headers: *id003
+  assert:
+    status: 200
+    json:
+    - path: $.code
+      equals: SUCCESS
+  db_check:
+  - table: t_cs_issue_config
+    sql: SELECT deleted_at FROM t_cs_issue_config WHERE issue_config_name='[FLOW]TPL_MERCHANT_ONBOARDING_<run_id>' ORDER BY id DESC LIMIT 1;
+    expect: deleted_at != 0（模板软删生效）
+    reason: 确认模板真被删（清理动作生效，避免残留脏模板）
+- id: brand_tpl_save
+  desc: '[BRAND_PROTECTION] 建专属模板'
+  request:
+    method: POST
+    url: '{{base_url}}/mapi/cs/issue/config/save'
+    headers: *id001
+    json:
+      issueConfigName: '[FLOW]TPL_BRAND_PROTECTION_{{run_id}}'
+      issueConfigDesc: 多类型模板
+      subIssueType: BRAND_PROTECTION
+      primaryKeyConfig:
+      - name: sellerId
+      - name: merchantId
+      - name: merchantName
+      materialsConfig:
+      - name: 说明
+        isNotNull: 'no'
+        inputType: TEXT
+        materialsDesc: d
+      approvalConfigs: *id002
+      isWriteQualification: 0
+      isAppointMonth: 0
+  assert:
+    status: 200
+    json:
+    - path: $.code
+      equals: SUCCESS
+  db_check:
+  - table: t_cs_issue_config
+    sql: SELECT id, sub_issue_type, deleted_at FROM t_cs_issue_config WHERE issue_config_name='[FLOW]TPL_BRAND_PROTECTION_<run_id>' ORDER BY id DESC LIMIT 1;
+    expect: 1 行；sub_issue_type 对应 BRAND_PROTECTION；deleted_at=0
+    reason: 模板真的建进 t_cs_issue_config（config/save 只回 SUCCESS，configId 靠下一步 list 查回）
+  note: ⏳ sub_issue_type 在库里的确切存储值(BRAND_PROTECTION 还是无下划线写法)首跑确认一次
+- id: brand_tpl_find
+  desc: '[BRAND_PROTECTION] list 查回 configId'
+  request:
+    method: POST
+    url: '{{base_url}}/mapi/cs/issue/config/list'
+    headers: *id001
+    json:
+      pageNum: 1
+      pageSize: 5
+      issueConfigName: '[FLOW]TPL_BRAND_PROTECTION_{{run_id}}'
+  extract:
+    brand_tpl_id: $.data.list[0].issueConfigId
+  assert:
+    status: 200
+    json:
+    - path: $.code
+      equals: SUCCESS
+    - path: $.data.list[0].issueConfigId
+      exists: true
+  note: ⏳ 分页响应体路径 data.list[] 首跑确认（与 config/list 真实结构对齐）
+- id: brand_wo_save
+  desc: '[BRAND_PROTECTION] 用模板+真实主键建工单'
+  request:
+    method: POST
+    url: '{{base_url}}/mapi/cs/issue/normal/save'
+    headers: *id001
+    json:
+      submitType: ADD
+      issueName: '[FLOW]WO_BRAND_PROTECTION_{{run_id}}'
+      applyDesc: 多类型流程
+      issueConfigId: '{{brand_tpl_id}}'
+      approvalConfig: *id002
+      carbonList:
+      - liyanda@shoplineapp.com
+      materialsConfig:
+      - fieldName: 说明
+        fieldValue: 测试
+      primaryKeyConfig:
+      - fieldName: merchantId
+        fieldInputType: TEXT
+        fieldValue:
+        - li0106@123.com
+      brandType: SELF_BRAND
+      brandName: 测试品牌
+      brandExpireTime: 1893456000000
+  extract:
+    brand_wo_id: $.data
+  assert:
+    status: 200
+    json:
+    - path: $.code
+      equals: SUCCESS
+    - path: $.data
+      exists: true
+  db_check:
+  - table: t_cs_issue
+    sql: SELECT issue_status, deleted_at FROM t_cs_issue WHERE id=<brand_wo_id>;
+    expect: 1 行；issue_status=1(待审批)；deleted_at=0
+    reason: 工单主表真建了一条待审批工单
+  - table: t_cs_issue_field_value
+    sql: SELECT field_value FROM t_cs_issue_field_value WHERE issue_id=<brand_wo_id> AND field_type='PRIMARY' AND field_name='merchantId' AND deleted_at=0;
+    expect: field_value = 'li0106@123.com'（非空！）
+    reason: '缺陷1: 空主键会被静默存成 '''' 而非报错；入参非空必须回读到真值，否则=主键丢失脏单'
+- id: brand_wo_detail
+  desc: '[BRAND_PROTECTION] 详情取字符串 issueId'
+  request:
+    method: GET
+    url: '{{base_url}}/mapi/cs/issue/normal/{{brand_wo_id}}'
+    headers: *id003
+  extract:
+    brand_wo_id: $.data.issueId
+  assert:
+    status: 200
+    json:
+    - path: $.code
+      equals: SUCCESS
+    - path: $.data.issueName
+      contains: '[FLOW]'
+- id: brand_approve
+  desc: '[BRAND_PROTECTION] 审批通过→完结(名单类触发同步)'
+  request:
+    method: POST
+    url: '{{base_url}}/mapi/cs/issue/normal/approve'
+    headers: *id001
+    json:
+      issueId: '{{brand_wo_id}}'
+      approveStatus: SUCCESS
+      approveDesc: 多类型审批
+  assert:
+    status: 200
+    json:
+    - path: $.code
+      equals: SUCCESS
+  db_check:
+  - table: t_cs_issue
+    sql: SELECT issue_status, current_approve_step_status FROM t_cs_issue WHERE id=<brand_wo_id>;
+    expect: issue_status=3(已完结)；current_approve_step_status='SUCCESS'
+    reason: 单级 SINGLE 审批通过后工单是否真流转到已完结（SUCCESS≠状态真变）
+  note: 🔴 品牌授权(isWriteQualification=1 才触发)本用例=0 不进入；真授权调用需人工确认
+- id: brand_wo_del
+  desc: '[BRAND_PROTECTION] 清理工单'
+  request:
+    method: DELETE
+    url: '{{base_url}}/mapi/cs/issue/base/{{brand_wo_id}}'
+    headers: *id003
+  assert:
+    status: 200
+    json:
+    - path: $.code
+      equals: SUCCESS
+  db_check:
+  - table: t_cs_issue
+    sql: SELECT deleted_at FROM t_cs_issue WHERE id=<brand_wo_id>;
+    expect: deleted_at != 0（软删；行仍在只是标了删除时间戳，非物删）
+    reason: 确认删除=软删且真生效
+- id: brand_tpl_del
+  desc: '[BRAND_PROTECTION] 清理模板'
+  request:
+    method: DELETE
+    url: '{{base_url}}/mapi/cs/issue/config/{{brand_tpl_id}}'
+    headers: *id003
+  assert:
+    status: 200
+    json:
+    - path: $.code
+      equals: SUCCESS
+  db_check:
+  - table: t_cs_issue_config
+    sql: SELECT deleted_at FROM t_cs_issue_config WHERE issue_config_name='[FLOW]TPL_BRAND_PROTECTION_<run_id>' ORDER BY id DESC LIMIT 1;
+    expect: deleted_at != 0（模板软删生效）
+    reason: 确认模板真被删（清理动作生效，避免残留脏模板）

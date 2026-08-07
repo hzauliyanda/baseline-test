@@ -1,0 +1,61 @@
+name: "S7-删除工单"
+base_url: "https://test-risk.inshopline.com"
+covers: ["TC-NWO-036","TC-NWO-037","TC-NWO-038"]
+depends_on: ["S6"]
+note: "负责清理本次自建的 [FLOW] 工单（S6 驳回单及 S2/S5 残留）"
+
+steps:
+  - action: navigate
+    url: "/risk-cooperation/cs/normal-work-order/list"
+    description: "S7-01: 导航到名单申请列表页"
+
+  - action: click
+    description: "S7-02: 在某条 [FLOW] 工单行点击「删除」(表格行内 a 文案)"
+
+  - action: assert
+    description: "S7-03: 弹出二次确认弹窗「确定要删除吗？」含「取消/删除」按钮"
+
+  # 取消
+  - action: click
+    description: "S7-04: 点击弹窗「取消」"
+
+  - action: assert
+    description: "S7-05: 未删除，工单仍在列表"
+
+  # 确认删除
+  - action: click
+    description: "S7-06: 再次点击该行「删除」"
+
+  - action: click
+    description: "S7-07: 在确认弹窗点击「删除」按钮确认"
+
+  - action: assert
+    description: "S7-08: 删除成功(DELETE /mapi/cs/issue/base/{id} 返回 SUCCESS)，列表刷新，该工单消失"
+
+  - action: assert
+    description: "S7-09: 清理其余 [FLOW] 标记的自建工单(重复删除步骤)，确保不残留测试数据"
+
+human_verify:
+  - id: HV-S7-01
+    tc_ids: ["TC-NWO-036","TC-NWO-037"]
+    method: screenshot
+    description: "截图验证确认弹窗与取消不删除"
+    what_to_check: "步骤 S7-03：截图含 Modal.delete 弹窗，标题「确定要删除吗？」，有「取消」「删除」按钮；步骤 S7-05：截图列表中该工单仍存在"
+
+  - id: HV-S7-02
+    tc_ids: ["TC-NWO-038"]
+    method: sql
+    description: "SQL 验证软删除标记写库"
+    sql: |
+      SELECT issue_id, issue_name, deleted_at
+      FROM t_cs_issue
+      WHERE issue_name LIKE '[FLOW]%'
+        AND issue_name IN ('[FLOW]UI自动化_驳回单', '[FLOW]UI草稿_保存单')
+      ORDER BY created_at DESC;
+    expected: "所有 [FLOW] 工单 deleted_at != 0（软删除毫秒时间戳，非0表示已删除）"
+
+  - id: HV-S7-03
+    tc_ids: ["TC-NWO-038"]
+    method: network
+    description: "抓包验证删除接口调用"
+    what_to_check: "DevTools Network 中存在 DELETE /mapi/cs/issue/base/{issueId} 请求，Response 返回 code='SUCCESS'"

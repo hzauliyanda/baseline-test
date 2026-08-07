@@ -1,0 +1,23 @@
+# 本次探索创建的实体台账（清理清单）
+# 系统: risk  模块: normal-work-order  环境: test
+system: test-risk.inshopline.com
+module: normal-work-order
+created:
+  - type: 普通工单
+    issueId: "6147"
+    issueName: FLOW探索测试单001
+    issueConfigId: "21"
+    template: 测试工单类型-一级审批
+    subIssueType: 其他(OTHER)
+    note: "[FLOW]标记，api-flow-recorder 探索创建，可删"
+    create_api: POST /mapi/cs/issue/normal/save
+    cleanup: 已删除（DELETE /mapi/cs/issue/base/6147）
+
+  - type: 普通工单
+    issueId: "6148"
+    issueName: FLOW驳回测试单001
+    issueConfigId: "21"
+    subIssueType: 其他(OTHER)
+    note: 用于验证驳回(REJECT)链路，approveStatus=REJECT 实跑通过
+    create_api: POST /mapi/cs/issue/normal/save
+    cleanup: 已删除（DELETE /mapi/cs/issue/base/6148）

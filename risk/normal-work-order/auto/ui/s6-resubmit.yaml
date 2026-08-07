@@ -1,0 +1,60 @@
+name: "S6-resubmit-驳回后重新提交"
+base_url: "https://test-risk.inshopline.com"
+covers: ["TC-NWO-115", "TC-NWO-116"]
+frontend_branch: "F-09"
+depends_on: ["S6"]
+note: |
+  覆盖「isCreator + reject状态 → 点「重新提交」→ AddNormalOrder 弹窗以编辑态打开（非新建）→ 完成提交」路径。
+  注意：当前逻辑是编辑当前工单（setNewIssueId=issueId），历史逻辑是新建一份副本，两者弹窗标题不同。
+
+steps:
+  - action: navigate
+    url: "/risk-cooperation/cs/normal-work-order/list"
+    description: "S6r-01: 导航到列表页"
+
+  - action: click
+    description: "S6r-02: 找到 S6 创建的 [FLOW] 工单（已驳回状态），点击「查看」进入详情"
+
+  - action: assert
+    description: "TC-NWO-115: 底部显示「取消」和「重新提交」按钮（isCreator=true + issueStatus=reject，对应 detail/index.tsx:394-402）"
+
+  - action: click
+    description: "S6r-03: 点击「重新提交」按钮"
+
+  - action: assert
+    description: "TC-NWO-116: AddNormalOrder 弹窗打开，标题为「编辑普通工单」（oldIssueData.status=pendingCommit 时显示编辑标题），工单名称字段 disabled，审批人区域为只读展示（isEdit=true 分支）；而非「新建普通工单」（确认重构后的行为符合预期）"
+
+  - action: input
+    description: "S6r-04: 修改「申请说明」字段内容（insertText），表明已做修改"
+    value: "[重新提交-自动化验证]申请说明已更新"
+
+  - action: click
+    description: "S6r-05: 点击「完成」提交"
+
+  - action: assert
+    description: "S6r-06: 弹窗关闭，详情页刷新，工单状态从「已驳回」变回「待审批」（POST /mapi/cs/issue/normal/save，issueId 为原工单 id）"
+
+human_verify:
+  - id: HV-S6r-01
+    tc_ids: ["TC-NWO-115"]
+    method: screenshot
+    description: "截图验证详情底部「重新提交」按钮存在"
+    what_to_check: "步骤 S6r-02 后截图：详情页底部操作区出现「取消」和「重新提交」两个按钮，工单状态显示「已驳回」"
+
+  - id: HV-S6r-02
+    tc_ids: ["TC-NWO-116"]
+    method: screenshot
+    description: "截图验证弹窗标题为编辑态"
+    what_to_check: "步骤 S6r-03 后截图：弹窗标题为「编辑普通工单」（非「新建普通工单」）；工单名称 Input 有 disabled 属性显示灰色；审批人区域为只读文本展示"
+
+  - id: HV-S6r-03
+    tc_ids: ["TC-NWO-116"]
+    method: sql
+    description: "SQL 验证重新提交后工单状态恢复待审批"
+    sql: |
+      SELECT issue_id, issue_status, updated_at
+      FROM t_cs_issue
+      WHERE issue_name LIKE '[FLOW]%'
+        AND issue_status = 'PENDING_APPROVE'
+      ORDER BY updated_at DESC LIMIT 3;
+    expected: "原驳回工单 issue_status 变为 'PENDING_APPROVE'（待审批），updated_at 更新为当前时间"

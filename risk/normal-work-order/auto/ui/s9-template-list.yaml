@@ -1,0 +1,42 @@
+name: "S9-模版管理列表"
+base_url: "https://test-risk.inshopline.com"
+covers: ["TC-NWO-044","TC-NWO-045","TC-NWO-046"]
+
+steps:
+  - action: navigate
+    url: "/risk-cooperation/cs/normal-work-order/template"
+    description: "S9-01: 导航到模版管理列表页"
+
+  - action: assert
+    description: "S9-02: 列表加载(POST /mapi/cs/issue/config/list)，列含 模板ID/模板名称/模板类型/操作时间/创建人/操作"
+
+  - action: assert
+    description: "S9-03: 每行操作含「复制」「编辑」「删除」三个入口"
+
+  - action: assert
+    description: "S9-04: 顶部含「新增工单模板」按钮"
+
+  - action: click
+    description: "S9-05: 点击「新增工单模板」"
+
+  - action: assert
+    description: "S9-06: 跳转到 /template/add 模板表单页，含 基础信息/主键配置/审批配置/抄送 区块（注：模板完整提交接口本次未覆盖，仅验证入口与表单结构）"
+
+human_verify:
+  - id: HV-S9-01
+    tc_ids: ["TC-NWO-044","TC-NWO-045"]
+    method: screenshot
+    description: "截图验证列表列结构与操作按钮"
+    what_to_check: "截图：含列头「模板ID / 模板名称 / 模板类型 / 操作时间 / 创建人 / 操作」；随机取一行，操作列含「复制」「编辑」「删除」3 个 a 链接"
+
+  - id: HV-S9-02
+    tc_ids: ["TC-NWO-046"]
+    method: screenshot
+    description: "截图验证新增模板入口表单结构"
+    what_to_check: "截图：/template/add 页面顶部面包屑「模版管理 / 新增工单模板」，页面含「模板名称」「模板类型」「主键配置」「审批配置」「抄送配置」区块"
+
+  - id: HV-S9-03
+    tc_ids: ["TC-NWO-044"]
+    method: network
+    description: "抓包验证列表接口正常"
+    what_to_check: "DevTools Network → POST /mapi/cs/issue/config/list，Response data.total > 0，data.list 非空"
