@@ -23,6 +23,7 @@ auto/screenshots/
 **/auto/api/api-exec-result.json
 **/auto/ui-exec-result.json
 **/auto/ui-pw-result.json
+**/auto/ui-ego-exec-result.json
 **/auto/ui/ui-exec-result.json
 **/docs/reports/*.html
 **/reports/*.html

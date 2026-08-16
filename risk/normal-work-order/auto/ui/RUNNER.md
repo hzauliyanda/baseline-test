@@ -1,4 +1,7 @@
-# UI 回归 Runner 说明
+# UI 回归 Runner 说明（纯 ego-browser）
+
+> 2026-08-16 起 UI 段**全面 ego 化**：无 9333 Chrome、无 Playwright、无独立 CDP 工具链。
+> 浏览器唯一入口 = **ego lite**（复用用户登录态）。旧 TS Playwright 版（runner.spec.ts / runner-augment.spec.ts / runner.ts）已退役，仅留作语义快照参照。
 
 ## 全量回归（标准入口）
 
@@ -6,106 +9,94 @@
 # 一键：API + UI + 生成总览报告
 npm run regression
 
-# 仅跑 UI（生成 Playwright HTML report + ui-pw-result.json）
-npx playwright test
+# 仅跑 UI（纯 ego，22 场景）
+python3 auto/ui/ego_ui_runner.py
 
-# 查看 Playwright 交互式报告
-npx playwright show-report docs/reports/playwright-report
-
-# 带 Trace 录制
-npx playwright test --trace on
-npx playwright show-trace test-results/<测试名>/trace.zip
+# 指定场景
+python3 ego_ui_runner.py S2 S15        # 子集
+EGO_DEBUG=1 python3 ego_ui_runner.py   # 打印每次 ego CLI 原始输出
 ```
 
-> **ui_runner.py 已废弃**，不再维护。所有 UI 用例统一在 `runner.spec.ts`。
+## 文件结构
+
+| 文件 | 职责 |
+|------|------|
+| `ego_ui_runner.py` | 驱动内核（ego 通道/看门狗）+ 页面注入原语（antd 适配）+ 入口 |
+| `ego_scenarios.py` | 22 个场景实现（S1–S9 ← runner.spec.ts；S10–S23 ← runner-augment.spec.ts；S21 原版即缺号）+ TITLES |
+
+## 前置条件
+
+- **ego lite 已打开**且已登录 `test-risk.inshopline.com`（登录态复用用户会话；cookie 过期在 ego 窗口手动重登）
+- 任务空间：runner 自动发现（`listTaskSpaces` 取第一个）；没有则先 `useOrCreateTaskSpace('risk-normal-work-order-regression')` 建一次
+- API 段 cookie 同源：api_runner.py 也是 ego-only（`RISK_COOKIE` 环境变量可临时兜底）
+
+## 通道协议（2026-08-16 实测定型，内核已固化）
+
+| 现象 | 对策 |
+|------|------|
+| 动作型 CLI 调用回包概率性丢失 | 动作一律 **fire-and-forget 注入**（`eval(atob(b64))`）+ 独立微读取轮询回读 `window.__ego` 日志 |
+| `useOrCreateTaskSpace`/`js()` 会挂死 | `claimTaskSpace(<已有id>)` + `cdp()` |
+| CLI 挂死 | 看门狗超时（独立进程组 `killpg` 杀干净含孙进程）+ `pkill` 残留 + 单场景 FAIL 不拖垮整轮 |
+| 长 `await wait()` 在 ego CLI 里拖挂调用 | CLI 脚本秒回，**settle 全在 Python 侧** `time.sleep` |
+| 中文注入脚本 | base64(ascii backslashreplace)，页面侧 `eval(atob())` |
+| ego 进程被杀后任务空间清空 | 重开 ego lite → `useOrCreateTaskSpace` 重建 → runner 可继续 |
+
+## antd 驱动要点（全部实测验证）
+
+- **填值**：页面脚本 focus → `cdp('Input.insertText')` 原生管道（antd Form 认值）
+- **tags 回车**：CDP `Input.dispatchKeyEvent` **不被 rc-select 认**；必须页面内合成 `new KeyboardEvent('keydown',{key:'Enter',keyCode:13,...,bubbles:true})`（主键字段源码即 `mode="tags" open={false}`，下拉永不打开）
+- **Select**：`mousedown` 开启（不是 click）+ React native value setter 搜索 + **全名精确匹配**点击
+- **模板必须全名**：搜「测试工单类型-一级」会同时命中「一级多人审批」变体，取错则字段/审批人全错
+- **findItem 必须限定 `.ant-modal` 作用域**：列表页筛选表单有同名字段（工单名称），DOM 顺序在前会抢焦点（2026-08-16 踩坑实锤）
+
+## 设计约定
+
+- 除 S2/S5/S6/S7 有真实数据动作外，其余场景一律【取消/只读】，不提交不建数据 → 可重复跑
+- S2/S6 建单后 **API 查回铁证 + 自清理**；S7 兜底清扫 `[EGO]` 残留（UI 删不动时 API 兜底）
+- 条件不满足记 **SKIP**（对齐 Playwright test.skip 语义），不算 FAIL
+- 单场景异常/通道挂死只记该场景 FAIL，整轮继续
+
+## 添加新场景
+
+在 `ego_scenarios.py` 加 `run_sN(d)`，用现有原语拼装，然后注册进 `SCENARIOS` + `TITLES`：
+
+```python
+def run_s24(d: EgoDriver):
+    scene = "S24"
+    print(f"\n===== {scene} 新场景名 =====")
+    d.fire(js_goto(LIST_URL), settle=6)          # 导航
+    d.fire(js_click_text("按钮文案"), settle=2)   # 动作（fire-and-forget）
+    val = d.read(R_ROWS) or 0                     # 读取（带回包）
+    s1 = shot_step(d, scene, 1, "步骤名")          # 截图
+    rec(scene, "断言描述", "PASS" if val else "FAIL", f"val={val}", s1)
+
+SCENARIOS["S24"] = run_s24
+TITLES["S24"] = "S24 新场景名"
+```
 
 ## 回归报告格式（已固定）
 
-报告生成脚本：项目根 `gen_report.py`
+生成脚本：项目根 `gen_report.py`（2026-08-16 起读 `auto/ui-ego-exec-result.json`）
 产出：`docs/reports/普通工单-全量回归总览-YYYY-MM-DD.html`
 
 报告结构：
 1. **执行摘要** — UI PASS/FAIL/SKIP + API PASS/FAIL + 🟡DB校验数/🔴人工项数
-2. **UI 回归区** — S1–S9 折叠列表 + 截图；右上角「打开 Playwright Report」按钮
+2. **UI 回归区** — 22 场景折叠列表，展开含**步骤明细**（每步状态+detail+📷标记）+ 截图
 3. **API 回归区** — 5 flows 折叠，每 step 断言（path/期望/实际）+ Response Preview
-4. **DB 校验清单** — 可勾选 checkbox + 完整 SQL
-
----
-
-## 添加新用例
-
-在 `runner.ts` 末尾加一个函数，然后加进 `runners` 数组：
-
-```typescript
-async function runS10(page: Page) {
-  console.log('\n===== S10 xxx =====');
-  await page.goto(`${BASE}/...`);
-  await page.waitForLoadState('networkidle');
-  await shot(page, 'S10-01-xxx');
-  // 验证 ...
-  rec('S10', '步骤描述', 'PASS', '详情', 'S10-01-xxx');
-}
-
-// runners 数组末尾加：
-['S10', runS10],
-```
-
----
-
-## 核心工具函数
-
-| 函数 | 用途 |
-|------|------|
-| `shot(page, name)` | 截图（等 networkidle + spin 消失 + 弹窗动画结束）|
-| `clickText(page, text)` | 按文本找 button/a 并 JS click |
-| `jsClick(page, selector)` | CSS selector JS click |
-| `antSelect(page, containerSel, optionText)` | Ant Design Select（force click 打开 + insertText 搜索）|
-| `fillInput(page, selector, text)` | React 受控 input（insertText）|
-| `rowAction(page, action)` | 列表第一行点操作按钮 |
-| `rec(scene, step, status, detail, shot)` | 记录一步结果 |
-
----
-
-## Ant Design Select 的正确姿势
-
-```typescript
-// ❌ 错误：JS dispatchEvent 打开，但不 focus 搜索框
-trigger.dispatchEvent(new MouseEvent('mousedown', ...));
-
-// ✅ 正确：force click 打开（跳过 stability 检查，同时 focus 搜索框）
-await page.click(`${containerSel} .ant-select-selector`, { force: true });
-// 再用 insertText 搜索（keyboard.type 不触发 React onChange）
-await page.keyboard.insertText(text.slice(0, 8));
-```
-
----
-
-## 前置条件
-
-**仅 UI 段**需要 Chrome CDP。API 段（api_runner.py）自 2026-08-15 起从 **ego-browser** 抓 cookie，不再依赖此 Chrome。
-
-antd 表单驱动能力（2026-08-16 ego 实测更新）：
-- ❌ ego **高层 helpers**（typeText/insertText/setNativeValue，元素级合成事件）无法同步 antd Form state——2026-08-12 实测，维持
-- ✅ ego **raw cdp 通道可以完整跑通 S2 建单全链路**（2026-08-16 纯 ego 实跑：radio 选其他 → 模板全名搜索精确选中「测试工单类型-一级审批」(configId=21) → `Input.insertText` 原生打入工单名称 → 店铺Handle tags 回车成 token → 提交弹窗关闭零校验错误 → API 查回 issueId 6356/storeHandle 真值 → 删除清理）
-- ⚠️ 回车成 tag 的正确姿势：**CDP `Input.dispatchKeyEvent` 不会被 rc-select tokenizer 认**（试过带 text:'\r' 也无效）；必须页面内合成 `new KeyboardEvent('keydown', {key:'Enter', keyCode:13, bubbles:true})` 派发到搜索 input（React 根节点收合成事件即触发）。主键字段源码即证：`mode="tags"` + `open={false}`（下拉永不打开，纯回车成 token）
-- ⚠️ 模板选项必须**全名精确匹配**：搜「测试工单类型-一级」会同时命中「一级多人审批」变体，取错则字段/审批人全错（多人版主键是选项式「商家账号」Select、预填双人审批）
-- ⚠️ ego CLI 响应通道仍不稳（动作型调用回包概率性丢失，须 fire-and-forget+微读取轮询模式；useOrCreateTaskSpace/js() 挂死，claimTaskSpace+cdp() 可用）——**技术上 UI 段已可全迁 ego**，量产回归暂仍用 TS Playwright，待 ego 通道修复后即可切换（迁移=把 runner.spec.ts 的动作重写为上述 cdp 脚本模式）
-
-Chrome 需以 CDP 模式启动并已登录：
-
-```bash
-open -a 'Google Chrome' --args \
-  --remote-debugging-port=9333 \
-  --user-data-dir=$HOME/.chrome-test-profile
-```
-
----
+4. **人工覆盖清单** — 可勾选 checkbox + 完整 SQL
 
 ## 产出
 
 | 文件 | 说明 |
 |------|------|
-| `auto/screenshots/ui/Sx-xx.png` | 每步截图 |
-| `auto/ui-exec-result.json` | 步骤结果 JSON |
-| `docs/reports/普通工单-UI回归报告-YYYY-MM-DD.html` | 内嵌截图的 HTML 报告 |
-| `auto/ui-trace.zip` | Playwright Trace（`--trace` 时生成）|
+| `auto/screenshots/ui/{Sx}-ego-{NN}-{步骤}.png` | 每步截图（31 张/轮） |
+| `auto/ui-ego-exec-result.json` | 步骤记录 JSON（scene/step/status/detail/shot + scenes 聚合含 title/ms） |
+
+## 已知能力边界（对齐 Playwright 的差异）
+
+| 能力 | Playwright | 纯 ego |
+|------|-----------|--------|
+| 每步截图 | ✅ | ✅ |
+| console/网络抓取 | ✅ | ✅（cdp 域可用）|
+| Trace 时间轴 | ✅ | ❌（用步骤 JSON+截图替代）|
+| 录屏 | ✅(video) | ⚠️（需 macOS 录屏权限，未启用）|

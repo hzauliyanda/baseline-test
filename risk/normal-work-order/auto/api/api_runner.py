@@ -6,7 +6,6 @@ from jsonpath_ng.ext import parse as jp_parse
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT  = os.path.join(BASE_DIR, "..", "..")
 OUT_FILE = os.path.join(PROJECT, "auto", "api-exec-result.json")
-CDP_PORT = 9333
 BASE_URL = "https://test-risk.inshopline.com"
 
 FLOW_FILES = [
@@ -17,7 +16,7 @@ FLOW_FILES = [
     "flow-negative.yaml",
 ]
 
-# ── 1. 抓 Cookie：ego-browser 优先（2026-08-15 起），CDP 9333 兜底 ──────────
+# ── 1. 抓 Cookie：ego-browser（2026-08-16 起 ego-only，CDP 9333 已退役） ─────
 def get_cookie_from_ego():
     """ego-browser runtime 开已登录 tab，cdp('Network.getCookies') 抓全量 cookie（含 httpOnly
     的 riskSessionId/armorSession——document.cookie 拿不到，必须走 CDP）。
@@ -41,7 +40,8 @@ def get_cookie_from_ego():
         os.unlink(sh)
 
 def get_cookie():
-    """优先级：RISK_COOKIE 显式注入 > ego-browser（默认，复用登录态）> CDP 9333（兜底）"""
+    """优先级：RISK_COOKIE 显式注入 > ego-browser（唯一浏览器来源，复用登录态）。
+    2026-08-16 起不再有 CDP 9333 兜底——独立 Chrome 已按统一 ego-browser 方针退役。"""
     env = os.environ.get("RISK_COOKIE", "").strip()
     if env:
         print(f"✅ 使用 RISK_COOKIE 环境变量（{len(env)} 字符）"); return env
@@ -49,32 +49,14 @@ def get_cookie():
         ck = get_cookie_from_ego()
         if ck:
             print(f"✅ ego-browser 抓到 Cookie（{len(ck)} 字符）"); return ck
-        print("⚠️ ego-browser 返回空 cookie，回退 CDP 9333")
+        print("❌ ego-browser 返回空 cookie")
     except FileNotFoundError:
-        print("⚠️ ego-browser 未安装，回退 CDP 9333")
+        print("❌ ego-browser CLI 不在 PATH")
     except Exception as e:
-        print(f"⚠️ ego-browser 不可用（{e}），回退 CDP 9333")
-    return get_cookie_from_cdp()
-
-def get_cookie_from_cdp():
-    sys.path.insert(0, "/Users/liyanda/.claude/skills/api-flow-recorder/scripts")
-    try:
-        from cdplib import connect
-        cdp, _, _ = connect()
-    except Exception as e:
-        print(f"❌ 无法连接 CDP port {CDP_PORT}：{e}")
-        print("   请先启动 Chrome：")
-        print(f"   open -a 'Google Chrome' --args --remote-debugging-port={CDP_PORT} --user-data-dir=$HOME/.chrome-test-profile")
-        sys.exit(1)
-
-    result = cdp.cmd("Network.getCookies", {"urls": [BASE_URL]})
-    cookies = result.get("cookies", [])
-    cookie_str = "; ".join(f"{c['name']}={c['value']}" for c in cookies)
-
-    if not cookie_str:
-        print("❌ Cookie 为空，请先在 Chrome(port 9333) 登录 test-risk.inshopline.com"); sys.exit(1)
-    print(f"✅ 抓到 Cookie（{len(cookies)} 条）")
-    return cookie_str
+        print(f"❌ ego-browser 不可用（{e}）")
+    print("   修复：打开 ego lite 并登录 test-risk.inshopline.com（登录态复用用户会话），")
+    print("   或临时注入：export RISK_COOKIE='<整段cookie>'")
+    sys.exit(1)
 
 
 # ── 2. 变量替换 ──────────────────────────────────────────────────────────────

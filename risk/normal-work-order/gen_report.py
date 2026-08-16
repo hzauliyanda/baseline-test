@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-全量回归总览报告生成器
+全量回归总览报告生成器（2026-08-16 起 UI 段数据源 = 纯 ego runner）
 读取:
-  auto/ui-pw-result.json   — Playwright JSON reporter 输出
+  auto/ui-ego-exec-result.json — ego_ui_runner.py 输出（22 场景）
   auto/api-exec-result.json — API runner 输出
   docs/checklists/普通工单-人工校验清单.md — L2 人工清单
 输出:
@@ -12,7 +12,6 @@ import json, os, re, base64, datetime, subprocess
 
 ROOT  = os.path.dirname(os.path.abspath(__file__))
 SHOTS = os.path.join(ROOT, "auto", "screenshots", "ui")
-PW_REPORT_DIR = os.path.join(ROOT, "docs", "reports", "playwright-report")
 
 def load(path):
     with open(path, encoding="utf-8") as f:
@@ -24,39 +23,41 @@ def b64(path):
         return "data:image/png;base64," + base64.b64encode(f.read()).decode()
 
 # ── 读数据 ────────────────────────────────────────────────────────────────────
-pw   = load(os.path.join(ROOT, "auto", "ui-pw-result.json"))
+ego  = load(os.path.join(ROOT, "auto", "ui-ego-exec-result.json"))
 api  = load(os.path.join(ROOT, "auto", "api-exec-result.json"))
 
 checklist_path = os.path.join(ROOT, "docs", "checklists", "普通工单-人工校验清单.md")
 checklist_md = open(checklist_path, encoding="utf-8").read() if os.path.exists(checklist_path) else ""
 
-# ── 解析 Playwright JSON ──────────────────────────────────────────────────────
-def parse_pw(pw_data):
-    specs = []
-    def walk(node):
-        for spec in node.get("specs", []):
-            t = spec["tests"][0]
-            r = t["results"][0]
-            shots = [a for a in r.get("attachments", []) if a.get("contentType") == "image/png"]
-            specs.append({
-                "title": spec["title"],
-                "status": r["status"],          # passed/failed/skipped
-                "duration_ms": r["duration"],
-                "shots": shots,
-            })
-        for child in node.get("suites", []):
-            walk(child)
-    for suite in pw_data.get("suites", []):
-        walk(suite)
-    return specs
+# ── 解析 ego 结果 JSON ────────────────────────────────────────────────────────
+def parse_ego(e):
+    """records → 场景聚合：状态 = 任一 FAIL→failed；否则全 SKIP→skipped；否则 passed"""
+    order, by_scene = [], {}
+    for r in e.get("records", []):
+        sc = r["scene"]
+        if sc not in by_scene:
+            by_scene[sc] = {"title": sc, "status": None, "steps": [], "shots": [], "duration_ms": 0}
+            order.append(sc)
+        s = by_scene[sc]
+        s["steps"].append(r)
+        if r.get("shot") and r["shot"] not in s["shots"]:
+            s["shots"].append(r["shot"])
+    for sc, s in by_scene.items():
+        st_map = {r["status"] for r in s["steps"]}
+        s["status"] = ("failed" if "FAIL" in st_map
+                       else "skipped" if st_map == {"SKIP"}
+                       else "passed")
+        meta = (e.get("scenes") or {}).get(sc) or {}
+        s["title"] = meta.get("title", sc)
+        s["duration_ms"] = meta.get("ms", 0)
+    return [by_scene[sc] for sc in order]
 
-ui_tests = parse_pw(pw)
-pw_stats  = pw.get("stats", {})
+ui_tests = parse_ego(ego)
 
 ui_pass  = sum(1 for t in ui_tests if t["status"] == "passed")
 ui_fail  = sum(1 for t in ui_tests if t["status"] == "failed")
-ui_skip  = sum(1 for t in ui_tests if t["status"] in ("skipped", "timedOut"))
-ui_total_ms = pw_stats.get("duration", sum(t["duration_ms"] for t in ui_tests))
+ui_skip  = sum(1 for t in ui_tests if t["status"] == "skipped")
+ui_total_ms = sum(t["duration_ms"] for t in ui_tests)
 
 # ── 解析 API JSON ─────────────────────────────────────────────────────────────
 api_pass = api_fail = api_steps = 0
@@ -99,20 +100,25 @@ def ui_test_rows():
         sid = t["title"].split()[0]  # S1, S2, ...
         badge = status_badge(t["status"])
         dur   = fmt_ms(t["duration_ms"])
+
+        steps_html = ""
+        for st in t["steps"]:
+            icon = {"PASS": "✅", "FAIL": "❌", "SKIP": "⏭️"}.get(st["status"], "·")
+            detail = str(st.get("detail", ""))[:160].replace("<", "&lt;")
+            shots_note = f' <span style="color:#1677ff;font-size:11px">📷</span>' if st.get("shot") else ""
+            steps_html += (f'<div style="padding:3px 0;font-size:12px;border-bottom:1px dashed #eee">'
+                           f'{icon} <strong>{st["step"]}</strong>{shots_note}'
+                           f' — <span style="color:#666">{detail}</span></div>')
+
         shots_html = ""
-        for shot in t["shots"]:
-            img_path = shot.get("path", "")
-            # 也尝试从 auto/screenshots/ui/ 找同名文件
-            fname = os.path.basename(img_path).split("-")[0:3]  # S1-01-list
-            if img_path and os.path.exists(img_path):
-                src = b64(img_path)
-            else:
-                # 从 name 猜文件名
-                name = shot.get("name", "")
-                guessed = os.path.join(SHOTS, f"{name}.png")
-                src = b64(guessed)
+        for shot_path in t["shots"]:
+            src = b64(shot_path)
             if src:
-                shots_html += f'<img src="{src}" style="max-width:480px;max-height:280px;border-radius:6px;border:1px solid #e8e8e8;margin:4px 4px 4px 0;display:inline-block;vertical-align:top">'
+                name = os.path.basename(shot_path)
+                shots_html += (f'<div style="display:inline-block;vertical-align:top;margin:6px 8px 6px 0">'
+                               f'<div style="font-size:11px;color:#888;margin-bottom:2px">{name}</div>'
+                               f'<img src="{src}" style="max-width:480px;max-height:280px;border-radius:6px;'
+                               f'border:1px solid #e8e8e8"></div>')
 
         detail_id = f"ui_{sid}"
         rows.append(f"""
@@ -124,7 +130,8 @@ def ui_test_rows():
     <span style="margin-left:auto;color:#aaa;font-size:12px">{dur}</span>
   </div>
   <div id="{detail_id}" style="display:none;padding:8px 40px 16px;background:#fafafa">
-    {shots_html if shots_html else '<span style="color:#aaa;font-size:12px">无截图</span>'}
+    {steps_html}
+    <div style="margin-top:8px">{shots_html if shots_html else '<span style="color:#aaa;font-size:12px">无截图</span>'}</div>
   </div>
 </div>""")
     return "\n".join(rows)
@@ -290,9 +297,6 @@ date_str = datetime.date.today().isoformat()
 time_str = datetime.datetime.now().strftime("%H:%M")
 ui_dur   = fmt_ms(ui_total_ms)
 
-# 计算 Playwright report 相对路径
-pw_report_rel = "playwright-report/index.html"
-
 html = f"""<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -333,7 +337,7 @@ function toggle(id){{
     <p style="color:#888;font-size:13px">执行时间：{date_str} {time_str}</p>
     <div class="summary" style="padding:14px 0 0">
       <div>
-        <p style="font-size:12px;color:#888;margin-bottom:8px;font-weight:500">UI 回归（S1–S9）</p>
+        <p style="font-size:12px;color:#888;margin-bottom:8px;font-weight:500">UI 回归（{len(ui_tests)} 场景 · 纯 ego）</p>
         <div style="display:flex;gap:10px">
           <div class="stat" style="background:#f6ffed;border:1px solid #b7eb8f"><div class="n" style="color:#52c41a">{ui_pass}</div><div class="l">PASS</div></div>
           <div class="stat" style="background:#fff1f0;border:1px solid #ffa39e"><div class="n" style="color:#f5222d">{ui_fail}</div><div class="l">FAIL</div></div>
@@ -355,7 +359,7 @@ function toggle(id){{
         <p style="font-size:12px;color:#888;margin-bottom:8px;font-weight:500">人工待核对</p>
         <div style="display:flex;gap:10px">
           <div class="stat" style="background:#fffbe6;border:1px solid #ffe58f"><div class="n" style="color:#d48806">{api_db_checks}</div><div class="l">🟡 DB校验</div></div>
-          <div class="stat" style="background:#fff1f0;border:1px solid #ffa39e"><div class="n" style="color:#cf1322">29</div><div class="l">🔴 人工项</div></div>
+          <div class="stat" style="background:#fff1f0;border:1px solid #ffa39e"><div class="n" style="color:#cf1322">{count_l3_items()}</div><div class="l">🔴 人工项</div></div>
         </div>
       </div>
     </div>
@@ -365,8 +369,8 @@ function toggle(id){{
 <!-- UI 回归 -->
 <div class="card">
   <div class="card-header">
-    <h2>UI 回归（S1–S9）</h2>
-    <a class="btn" href="{pw_report_rel}" target="_blank">📊 查看完整 Playwright Report →</a>
+    <h2>UI 回归（{len(ui_tests)} 场景 · ego-browser）</h2>
+    <span style="font-size:12px;color:#888">截图目录 auto/screenshots/ui/ · 步骤明细 auto/ui-ego-exec-result.json</span>
   </div>
   <div style="padding:4px 0">
     {ui_test_rows()}

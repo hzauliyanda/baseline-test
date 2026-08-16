@@ -2,26 +2,15 @@
   "name": "normal-work-order",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
   "directories": {
     "doc": "docs"
   },
   "scripts": {
-    "test": "playwright test",
-    "test:report": "playwright show-report docs/reports/playwright-report",
-    "test:standalone": "tsx auto/ui/runner.ts",
-    "regression": "python3 auto/api/api_runner.py && playwright test && python3 gen_report.py"
+    "test": "python3 auto/ui/ego_ui_runner.py",
+    "regression": "python3 auto/api/api_runner.py && python3 auto/ui/ego_ui_runner.py && python3 gen_report.py"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs",
-  "devDependencies": {
-    "@playwright/test": "^1.62.0",
-    "@types/node": "^26.1.2",
-    "playwright": "^1.62.0",
-    "ts-node": "^10.9.2",
-    "tsx": "^4.23.1",
-    "typescript": "^7.0.2"
-  }
+  "type": "commonjs"
 }
