@@ -61,9 +61,26 @@
 
 ---
 
-## 第①步：tc-explore（建设中）
+## 第①步：tc-explore —— 双源探索建基线
 
-双源探索（ego 页面遍历 + 前后端代码扫描）+ 枚举维度表 + baseline.yaml 落盘。设计见 SPEC.md，实现在 `steps/1-explore/`（待建）。
+**前置**：前后端仓本地路径 + 系统 URL + ego-browser 已登录目标系统
+
+**跑法（四步，详见 `steps/1-explore/README.md`）**
+```bash
+new-module.sh <模块根> --backend <后端仓> --frontend <前端仓> --title <中文名>
+#   脚手架：骨架 + baseline.yaml（audit_base=分支@HEAD 自动填）+ ③模板五件套
+python3 steps/1-explore/scan_repos.py <模块根> --api-prefix /mapi/<模块> --frontend-key <关键词>
+#   双源扫描 → explore/ 三份 draft（endpoint/枚举维度/前端路由 全集）
+# 然后：ego 页面遍历（capture_ego.sh goto/drain 抓接口+字典API）→ 圈选合成
+#   功能地图.md（枚举维度表+行为分叉列）/ baseline.yaml 核对 / flow.yaml 初版
+```
+
+**完成标志**：baseline.yaml 无⏳实值（audit_base 已锁 commit）+ 功能地图含枚举维度表
+（维度×取值×code ref×行为分叉?，扫描器与字典 API 差异已下结论）+ flow.yaml 主链路
+初版（断言全标 ⏳）+ explore/ 三份 draft 在仓。
+
+**注意**：扫描器是全集（实测 168 维度/3443 值），圈选必须显式——不相关的记
+「排除」，不许静默丢；这正是②枚举对账的锚。
 
 ## 第③步：tc-run —— 执行回归 + 完整报告
 

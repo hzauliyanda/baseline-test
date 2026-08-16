@@ -5,4 +5,4 @@
 **任何 AI 工具（Claude Code / Codex）的入口都是 `docs/SOP-四步.md`**——先读它，
 按用户所处步骤干活；设计决策与契约见 `SPEC.md`（冲突时以 SPEC 为准）。
 
-当前进度：schema 定稿 ✅ / ②tc-cases ✅（含 check_coverage.py 放行门，金标准实例实测 7 缺口全抓净） / ③tc-run ✅ / ④tc-verify ✅（真模块实测 verdict=FAIL 正确咬人）/ ① 建设中。
+当前进度：四步全部落地 ✅——schema 定稿 / ①tc-explore（双源扫描+ego抓包+脚手架，真仓逐值验证）/ ②tc-cases（放行门）/ ③tc-run（真模块实测）/ ④tc-verify（verdict=FAIL 正确咬人）。

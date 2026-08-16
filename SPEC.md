@@ -101,6 +101,6 @@ status 取值固定四态：`covered` / `skip_note`（带 note）/ `uncovered`�
 2. ✅ tc-cases（SOP② + check_coverage.py + skills/tc-cases）
 3. ✅ tc-run（编排器 run_regression.py + 参数化模板×5 + skills/tc-run；普通工单真模块实测 API-only 136/138 + UI 全量）
 4. ✅ tc-verify（verify_recon 机算六项 + 干净上下文五项对账；真模块实测 verdict=FAIL 落盘，抓到悬空引用等新缺口）
-5. ⬜ tc-explore（最难：api-flow-recorder 的 ego 化 + 双源扫描，最后攻）
+5. ✅ tc-explore（scan_repos 双源扫描器 + capture_ego 移植 + new-module 脚手架；金标准真仓验证逐值一致）
 
 git 已接原 remote（github.com/hzauliyanda/baseline-test，HEAD=kit）；旧仓内容三层保险：git 历史 + 本地 baseline-test-old-2026-08-16/ + zip 备份。

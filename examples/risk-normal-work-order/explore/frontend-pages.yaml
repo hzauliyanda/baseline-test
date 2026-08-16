@@ -1,0 +1,33 @@
+generated: '2026-08-16'
+frontend_key: normal-work-order
+routes:
+- path: /risk-cooperation/cs/normal-work-order
+  component: ''
+  ref: config/routes.ts:15
+- path: /risk-cooperation/cs/normal-work-order/list
+  component: ''
+  ref: config/routes.ts:22
+- path: /risk-cooperation/cs/normal-work-order/list/detail/:id
+  component: '@/pages/cs/normal-work-order/list/detail'
+  ref: config/routes.ts:30
+- path: /risk-cooperation/cs/normal-work-order/approved-list
+  component: ''
+  ref: config/routes.ts:35
+- path: /risk-cooperation/cs/normal-work-order/brand
+  component: ''
+  ref: config/routes.ts:43
+- path: /risk-cooperation/cs/normal-work-order/brand/create
+  component: '@/pages/cs/normal-work-order/brand/inner/add-brand-order'
+  ref: config/routes.ts:51
+- path: /risk-cooperation/cs/normal-work-order/brand/modify/:id
+  component: '@/pages/cs/normal-work-order/brand/inner/add-brand-order'
+  ref: config/routes.ts:56
+- path: /risk-cooperation/cs/normal-work-order/brand/detail/:id
+  component: '@/pages/cs/normal-work-order/brand/inner/brand-detail'
+  ref: config/routes.ts:61
+- path: /risk-cooperation/cs/normal-work-order/template
+  component: ''
+  ref: config/routes.ts:65
+- path: /risk-cooperation/cs/normal-work-order/template/add
+  component: '@/pages/cs/normal-work-order/template/add-template'
+  ref: config/routes.ts:73
