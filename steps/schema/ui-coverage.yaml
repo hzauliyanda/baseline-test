@@ -1,0 +1,42 @@
+# ui-coverage.yaml —— UI 覆盖矩阵（前端代码 ↔ UI 场景对账，可机算）
+# ②tc-cases 生成/维护；④tc-verify 抽查。金标准实例：examples/risk-normal-work-order/coverage/
+
+scope:
+  repo: frontend                       # 对应 baseline.yaml repos.frontend
+  audit_base: <branch@commit>
+  scanned: <YYYY-MM-DD>
+
+# 前端按「页面 × 交互」两级展开（扫描 router/页面组件得来）。
+# status 四态同 api-coverage：covered / skip_note / manual / uncovered（=缺口不放行）
+pages:
+  - page: <页面名+路由>                 # 如 工单列表 /issue/list
+    route: <前端路由>
+    source: <组件文件路径>              # code ref
+    interactions:
+      - interaction: <交互名>           # 如 新建工单/编辑抄送/审批通过/删除
+        cases: [<UI场景ID>]             # 如 S2；空 + uncovered = 缺口
+        status: covered
+      - interaction: <文件上传>
+        cases: []
+        status: manual
+        note: "🔴人工：上传依赖真实文件与跨系统副作用 → 人工清单 #n"
+
+# 枚举维度节（与 api-coverage.enums 同构）。
+# UI 侧的枚举=页面上的有界取值控件（模板类型 radio、状态下拉、角色切换…）。
+# rule：每值至少 1 条 UI 场景真实走过该控件取值（弹窗走查即可，不必每值全链路）。
+enums:
+  <维度名>:
+    source: { repo: frontend, file: <组件路径>, symbols: [<options 来源>] }
+    values: [<全部取值>]
+    covered:
+      <值>: [<UI场景ID>]
+    rule: 每值至少 1 条 UI 走查
+    gaps: []
+    exempt: {}
+
+# 状态机覆盖（如有）：状态流转图来自功能地图，每个可达状态至少被 1 条场景到达过或显式豁免
+states:
+  machine: <状态机名>                   # 如 工单状态
+  reachable: [<全部可达状态>]
+  covered: { <状态>: [<场景ID>] }
+  gaps: []

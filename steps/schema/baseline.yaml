@@ -1,0 +1,38 @@
+# baseline.yaml —— 模块基线元数据（基线包的自描述文件）
+# ①tc-explore 落盘首填，之后每次覆盖对账/回归都读它。
+# 金标准实例：examples/risk-normal-work-order/baseline.yaml
+
+module: <模块标识-kebab-case>          # 如 risk-normal-work-order
+system: <系统名>                       # 如 风控 CS 平台
+entry_url: <https://测试环境入口>       # ego 探索与回归的目标环境
+created: <YYYY-MM-DD>
+updated: <YYYY-MM-DD>
+
+repos:
+  backend:                             # 后端代码仓（API 覆盖对账的扫描对象）
+    url: <git 地址>                    # 必填：远程 git URL
+    local: <本地 clone 路径>            # 可选：有本地 clone 时填，扫描加速
+    audit_base: <branch@commit>        # 覆盖对账锚点；每次重扫前更新并记录
+  frontend:                            # 前端代码仓（UI 覆盖对账的扫描对象）
+    url: <git 地址>
+    local: <本地 clone 路径>
+    audit_base: <branch@commit>
+
+artifacts:                             # 基线包含什么、在哪（相对模块根）
+  feature_map: 功能地图.md
+  functional_cases: docs/functional-cases/
+  ui_cases: docs/ui-cases/
+  api_cases: auto/api/                 # flow*.yaml
+  ui_scenarios: auto/ui/
+  coverage: coverage/
+
+regression:
+  command: <一键回归命令>               # 如 npm run regression
+  baseline:                            # 基线口径（回归比对的锚，恒红必须注明原因）
+    api: <如 "136/138，2 负向恒红=服务端校验缺口">
+    ui: <如 "22 场景全绿，S4/S5 条件 SKIP 属已知语义">
+  report: <报告路径模式>                # 如 docs/reports/普通工单-全量回归总览-YYYY-MM-DD.html
+
+# 约定：
+# - audit_base 变更 = 代码动了 → 必须重跑覆盖对账（②）补缺口后再回归
+# - 本文件缺失或 repos.*.url 为空 → ②③④ 拒绝执行（无锚点）

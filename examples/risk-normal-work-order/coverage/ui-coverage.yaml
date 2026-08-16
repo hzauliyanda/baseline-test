@@ -1,0 +1,50 @@
+# 金标准实例：UI 覆盖矩阵（普通工单，手工首填 2026-08-16）
+# 佐证：《UI用例-前端代码覆盖审计-2026-08-04》识别出 10 个未覆盖分支（P1×3/P2×5/P3×2）
+
+scope:
+  repo: frontend
+  audit_base: local@⏳待回填commit
+  scanned: 2026-08-16                  # 手工首填，非机算
+
+pages:
+  - page: 工单列表
+    route: /issue 列表主页
+    source: ⏳src/views/cs 组件路径待机算
+    interactions:
+      - { interaction: 新建工单弹窗走查, cases: [S2, S15, S17], status: covered }
+      - { interaction: 列表筛选(名称/状态/类型/模板联动), cases: [S8, S22, S23], status: covered }
+      - { interaction: 编辑抄送人, cases: [S4], status: covered }
+      - { interaction: 审批通过/驳回, cases: [S5, S6, S19], status: covered }
+      - { interaction: 删除工单, cases: [S7, S9], status: covered }
+      - { interaction: 草稿保存/再编辑, cases: [], status: skip_note, note: "P1缺口 F-04/F-09：审计发现未覆盖，待补 S2-draft（api 层已有 paths:draft_*）" }
+      - { interaction: 文件上传/超限, cases: [], status: manual, note: "P2缺口 F-06 → 人工清单" }
+      - { interaction: 运营地区联动, cases: [], status: skip_note, note: "P1缺口 F-03：待补场景" }
+  - page: 模板配置
+    route: /issue/config
+    source: ⏳
+    interactions:
+      - { interaction: 模板列表/新建/编辑回显/删除, cases: [S9-S14], status: covered }
+      - { interaction: 审批配置(多级/多人), cases: [S13, S15], status: covered }
+      - { interaction: MULTI 审批人保存, cases: [], status: skip_note, note: "P2缺口 F-05：待补" }
+
+# ★枚举节实况：这正是 2026-08-16 李彦达发现的真缺口——
+#   UI 创建弹窗 5 类模板只走查了 2 类（当年 API 层人工补了 flow-all-types，UI 层漏了）
+enums:
+  模板类型(创建弹窗走查):
+    source: { repo: frontend, file: ⏳新建弹窗 radio 组件, symbols: [⏳options 来源] }
+    values: [NAME_LIST_APPLY, NAME_LIST_DELETE, OTHER, MERCHANT_ONBOARDING, BRAND_PROTECTION]
+    covered:
+      OTHER: [S2]                       # 「测试工单类型-一级审批」
+      NAME_LIST_APPLY: [S16]            # 「名单申请测试1」名单多行
+    rule: 每值至少 1 条 UI 弹窗走查
+    gaps: [NAME_LIST_DELETE, MERCHANT_ONBOARDING, BRAND_PROTECTION]   # ← 真缺口：②不放行，须补 3 条走查场景
+    exempt: {}
+
+states:
+  machine: 工单状态
+  reachable: [待审批, 审批中, 已驳回, 已完结, 待提交, 已废弃]
+  covered:
+    待审批: [S2, S5]
+    已驳回: [S6]
+    已完结: [S5, S20]
+  gaps: [审批中, 待提交, 已废弃]         # 待提交=草稿缺口同上；审批中/已废弃 UI 不可达或需多级前置，机算后定 exempt

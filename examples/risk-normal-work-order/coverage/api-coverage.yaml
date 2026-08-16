@@ -1,0 +1,55 @@
+# 金标准实例：API 覆盖矩阵（普通工单，手工首填 2026-08-16）
+# endpoints 全量清单待机算生成（tc-explore 扫描器落地后）；本文件先填示范行 + 枚举节真实数据。
+# 佐证：功能地图「八、接口补充」已做到 24 个 flow 接口 diff 零缺失（2026-08-02）。
+
+scope:
+  repo: backend
+  audit_base: master@⏳待回填commit
+  scanned: 2026-08-16                  # 本次为手工首填，非机算
+
+endpoints:
+  # 示范行×4（各 status 一行）；全量 24+ 接口机算后补全
+  - endpoint: "POST /mapi/cs/issue/save"
+    handler: save_issue（issue/save.go）# ⏳file:line 机算回填
+    cases: [flow:create, all-types:other_wo_save, paths:draft_create, negative:neg_save_primary_empty_silent]
+    status: covered
+  - endpoint: "POST /mapi/cs/issue/config/save"
+    handler: config_controller:239
+    cases: [supplement:config_save_create, supplement:config_save_edit]
+    status: covered
+  - endpoint: "POST /mapi/cs/issue/file/upload"
+    handler: base_controller:164
+    cases: []
+    status: skip_note
+    note: "multipart，runner 不支持 files= → 人工清单 Tier1 #文件上传"
+  - endpoint: "GET /mapi/cs/issue/xxx"
+    handler: ⏳
+    cases: []
+    status: uncovered                  # 示范缺口行：机算后发现未覆盖的 endpoint 长这样，②不放行
+
+enums:
+  模板类型:                             # 功能地图:212 + /base/enums 实测
+    source: { repo: backend, file: "⏳model/cs/issue_config 相关常量", symbols: [⏳] }
+    values: [NAME_LIST_APPLY, NAME_LIST_DELETE, OTHER, MERCHANT_ONBOARDING, BRAND_PROTECTION]
+    covered:                           # API 层：flow-all-types.yaml 每类一条全链（清单 #7–#36）
+      NAME_LIST_APPLY: [all-types:apply_tpl_save, apply_wo_save, apply_approve]
+      NAME_LIST_DELETE: [all-types:delete_tpl_save, delete_wo_save, delete_approve]
+      OTHER: [flow:create, all-types:other_wo_save]
+      MERCHANT_ONBOARDING: [all-types:onboard_wo_save, onboard_approve]
+      BRAND_PROTECTION: [all-types:brand_wo_save, brand_approve]
+    rule: 每值至少 1 条正向建单链
+    gaps: []                           # API 层 5/5 齐 —— 当年是人工补的 flow-all-types
+    exempt: {}
+  工单状态:                             # 功能地图:77（1待审批/2审批中/3已驳回/4已完结/8待提交/10已废弃）
+    source: { repo: backend, file: ⏳, symbols: [⏳] }
+    values: ["1待审批", "2审批中", "3已驳回", "4已完结", "8待提交", "10已废弃"]
+    covered:
+      "1待审批": [flow:create, all-types:*_wo_save]
+      "2审批中": [paths:multi_approve_step1]
+      "3已驳回": [flow-negatives 相关 reject 步]
+      "4已完结": [flow:approve, all-types:*_approve, paths:multi_approve_step2]
+      "8待提交": [paths:draft_create]
+      "10已废弃": []
+    rule: 每个可达状态至少 1 条用例到达
+    gaps: ["10已废弃"]                  # ⏳已废弃态无到达用例——真缺口，机算后决定补用例或 exempt
+    exempt: {}

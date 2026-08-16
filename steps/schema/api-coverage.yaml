@@ -1,0 +1,37 @@
+# api-coverage.yaml —— API 覆盖矩阵（后端代码 ↔ API 用例对账，可机算）
+# ②tc-cases 生成/维护；④tc-verify 抽查。金标准实例：examples/risk-normal-work-order/coverage/
+
+scope:
+  repo: backend                        # 对应 baseline.yaml repos.backend
+  audit_base: <branch@commit>          # 本次对账时的锚点（与 baseline.yaml 同步）
+  scanned: <YYYY-MM-DD>                # 最近一次扫描日期
+
+# 每个 endpoint 一行。status 四态（固定取值，不许自造）：
+#   covered    —— cases 非空且用例真实存在
+#   skip_note  —— 跑不了但有 note（对应 flow.yaml 的 🔴 skip_note / 人工清单项）
+#   manual     —— 🔴 人工项（跨系统/越权/并发/上传等），指向人工清单条目
+#   uncovered  —— 缺口。②的完成标志要求 uncovered = 空，非空不许进 ③
+endpoints:
+  - endpoint: "POST /mapi/xxx/save"    # 方法 + 路径（扫描产物）
+    handler: <file:line 或 func 名>    # code ref，能点回代码
+    cases: [<flow文件:step-id>]        # 覆盖它的用例；空数组 + uncovered = 缺口
+    status: covered
+  - endpoint: "POST /mapi/xxx/upload"
+    handler: <...>
+    cases: []
+    status: skip_note
+    note: "multipart，runner 不支持 files= → 人工清单 #n"
+
+# 枚举维度节：防"只测了一个类型"。
+# source 必须能重新扫出 values（机算时 diff 两边，不一致以代码为准并报警）。
+# rule 默认"每值至少 1 条正向"；功能地图标注行为分叉=是的维度才加组合要求。
+# gaps 由脚本 diff 生成，非空 = ②不放行；人工判断不补的值要移入 exempt 并写理由。
+enums:
+  <维度名>:
+    source: { repo: backend, file: <路径>, symbols: [<常量名>] }
+    values: [<全部取值>]
+    covered:
+      <值>: [<flow:step-id>]
+    rule: 每值至少 1 条正向
+    gaps: []                           # 机算：values - covered.keys() - exempt
+    exempt: {}                         # {值: 不覆盖理由}，verify 逐条过

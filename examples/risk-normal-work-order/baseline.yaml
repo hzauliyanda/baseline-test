@@ -1,0 +1,31 @@
+# 金标准实例：风控·普通工单（真实数据首填 2026-08-16）
+module: risk-normal-work-order
+system: 风控 CS 平台
+entry_url: https://test-risk.inshopline.com
+created: 2026-08-02
+updated: 2026-08-16
+
+repos:
+  backend:
+    url: https://git.inshopline.com/shopline/risk/backend/armor-smart-platform
+    local: /Users/liyanda/Documents/project_code/go/src/armor-smart-platform
+    audit_base: master@⏳待回填commit    # 2026-08-02 审计基准是 master，hash 需回填
+  frontend:
+    url: https://git.inshopline.com/shopline/risk/frontend/risk-cooperation
+    local: /Users/liyanda/Documents/project_code/frontend/risk-cooperation
+    audit_base: local@⏳待回填commit
+
+artifacts:
+  feature_map: 功能地图.md
+  functional_cases: docs/functional-cases/
+  ui_cases: docs/ui-cases/
+  api_cases: auto/api/
+  ui_scenarios: auto/ui/
+  coverage: coverage/                  # ⏳本实例首建于 kit，尚未拷回模块目录
+
+regression:
+  command: npm run regression
+  baseline:
+    api: "136/138，2 负向恒红=服务端校验缺口（neg_save_primary_empty_silent / neg_cfg_miss_carbon）"
+    ui: "22 场景全绿；S4/S5 条件 SKIP 属已知语义（非末级审批人/非当前审批人）"
+  report: docs/reports/普通工单-全量回归总览-YYYY-MM-DD.html
