@@ -31,7 +31,8 @@ baseline-test/
 ├── 使用手册.md            # 详细安装 + 配置 + 使用说明（新人必读）
 ├── risk/                  # 风控系统（@liyanda 维护）
 │   └── normal-work-order/ # ★ 满配参考样例（新建模块照这个结构做）
-└── slop/                  # 开放平台（待建）
+└── slop/                  # 开放平台（@liyanda 维护）
+    └── open-api/          # 发布平台（仅功能地图，待补 flow/用例）
 ```
 
 > **新建自己的模块**：在对应系统目录下参考 `risk/normal-work-order/` 的布局即可，或直接用脚手架一键生成（见快速上手）。
@@ -60,8 +61,8 @@ baseline-test/
 
 ```bash
 # 1. clone 本仓库
-git clone https://github.com/hzauliyanda/baseline-test.git ~/AI-TEST/api-flows
-cd ~/AI-TEST/api-flows
+git clone https://github.com/hzauliyanda/baseline-test.git ~/baseline-test
+cd ~/baseline-test
 
 # 2. 安装 Python 依赖
 pip3 install pyyaml requests websocket-client
@@ -89,6 +90,7 @@ bash _toolkit/new-module.sh <系统> <模块>   # 例：slop open-api
 | risk | complaint | 半配 | flow yaml + 功能用例，缺 UI |
 | risk | punish | 半配 | flow yaml + 功能用例，缺 UI |
 | risk | threathunter | 半成品 | 仅探索 + 1 flow |
+| slop | open-api | 半成品 | 仅功能地图.md（11 顶层模块 + Admin-REST/GQL、Storefront-GQL 深挖），缺 flow.yaml/用例 |
 
 > `risk/normal-work-order/` 是最完整的参考样例，新人建议先读它的目录和 flow yaml。
 

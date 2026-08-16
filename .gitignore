@@ -44,3 +44,7 @@ __pycache__/
 
 # macOS
 .DS_Store
+
+# skills 本体暂不入库（2026-08-16 迁移保真保留本地，待重做后随仓分发）
+skills/
+_toolkit/setup.sh

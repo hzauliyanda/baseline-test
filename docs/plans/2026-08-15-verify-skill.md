@@ -8,7 +8,7 @@
 
 **Tech Stack:** Claude Code skills（markdown）、Agent 工具（Explore 类型）、python3（subagent 解析 JSON 用，系统自带）。
 
-**Spec:** `~/AI-TEST/api-flows/docs/specs/2026-08-15-verify-step-design.md`
+**Spec:** `~/baseline-test/docs/specs/2026-08-15-verify-step-design.md`
 
 ## Global Constraints
 
@@ -232,8 +232,8 @@ Expected: 看到"跑完必做：verify 审查"节
 ### Task 5: 金标准埋雷验收（普通工单模块）
 
 **Files:**
-- Modify（临时，验收后还原）: `~/AI-TEST/api-flows/risk/normal-work-order/auto/api/flow.yaml`
-- Create（验收产物）: `~/AI-TEST/api-flows/risk/normal-work-order/docs/reports/verify-<当日>.md`
+- Modify（临时，验收后还原）: `~/baseline-test/risk/normal-work-order/auto/api/flow.yaml`
+- Create（验收产物）: `~/baseline-test/risk/normal-work-order/docs/reports/verify-<当日>.md`
 
 **Interfaces:**
 - Consumes: Task 1-4 的完整链路（verify skill + checklist + 两个接入点）
@@ -242,7 +242,7 @@ Expected: 看到"跑完必做：verify 审查"节
 - [ ] **Step 1: 埋雷 3——注释 flow.yaml 一个步骤（篡改+覆盖雷）**
 
 ```bash
- cd ~/AI-TEST/api-flows/risk/normal-work-order/auto/api
+ cd ~/baseline-test/risk/normal-work-order/auto/api
  # 记住当前状态便于还原
  git status --short flow.yaml   # 应为干净
  # 把最后一个 step 整段注释掉（用 python 注释含最后一个小节的行，避免手工改坏）
@@ -277,8 +277,8 @@ subagent 返回后检查：
 - [ ] **Step 4: 落盘 verdict 并还原现场**
 
 - verdict 落盘 `docs/reports/verify-<当日>.md`（作为首份真实样例保留）
-- 还原 flow.yaml：`git -C ~/AI-TEST/api-flows checkout -- risk/normal-work-order/auto/api/flow.yaml`
-- 确认：`git -C ~/AI-TEST/api-flows status --short risk/normal-work-order/auto/api/flow.yaml` 输出为空
+- 还原 flow.yaml：`git -C ~/baseline-test checkout -- risk/normal-work-order/auto/api/flow.yaml`
+- 确认：`git -C ~/baseline-test status --short risk/normal-work-order/auto/api/flow.yaml` 输出为空
 
 - [ ] **Step 5: 干净轮复核（防 verify 只会喊 FAIL）**
 
@@ -291,7 +291,7 @@ subagent 返回后检查：
 ### Task 6: 文档与 memory 同步
 
 **Files:**
-- Modify: `~/AI-TEST/api-flows/使用手册.md`（流水线说明处加 verify⑩ 一句）
+- Modify: `~/baseline-test/使用手册.md`（流水线说明处加 verify⑩ 一句）
 - Modify: `~/.claude/projects/-Users-liyanda/memory/api-flows-playbook.md`（提一笔 verify⑩ 已上线）
 
 **Interfaces:**
@@ -316,7 +316,7 @@ subagent 返回后检查：
 - [ ] **Step 3: api-flows 提交（需用户点头）**
 
 ```bash
-cd ~/AI-TEST/api-flows && git add docs/specs/2026-08-15-verify-step-design.md docs/plans/2026-08-15-verify-skill.md 使用手册.md
+cd ~/baseline-test && git add docs/specs/2026-08-15-verify-step-design.md docs/plans/2026-08-15-verify-skill.md 使用手册.md
 git commit -m "docs: verify⑩执行审查 skill 设计/计划/接入说明"
 ```
 

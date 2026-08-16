@@ -26,7 +26,7 @@
 
 ### 2.1 环境准备
 - **持久化 Chrome**：`bash ~/.claude/skills/api-flow-recorder/scripts/launch_chrome.sh 9333 <URL>`
-  - 独立 profile（`~/AI-TEST/api-flows/.chrome-profile`），登录态长期复用，首次手动登录，之后免登录。
+  - 独立 profile（`~/baseline-test/.chrome-profile`），登录态长期复用，首次手动登录，之后免登录。
 - **后台抓包**：`nohup python3 scripts/recorder.py <session> &`（探索全程常驻；注意 ws 约 2 分钟超时，关键动作前重启）。
 - **确认登录态**：`python3 scripts/cdp.py url`
 
@@ -41,7 +41,7 @@ cookie="; ".join(f'{c["name"]}={c["value"]}' for c in r["cookies"])
 open("/tmp/risk_cookie.txt","w").write(cookie)
 # 8 字段：riskAccountUid/riskAccountId/riskAppId/armorPlatform/armorSession/riskUserId/platformLanguage/riskSessionId
 ```
-执行时：`RISK_COOKIE=$(cat /tmp/risk_cookie.txt) python3 runner.py flow.yaml`
+执行时：`RISK_COOKIE=$(cat /tmp/risk_cookie.txt) python3 ~/.claude/skills/regression-runner/scripts/regression_runner.py flow.yaml --smoke`
 
 ### 2.3 真实业务数据池（绕过"搜索接口空数据"卡点）
 UI 主键值搜索（`/primary/search`）在测试环境返回空 → 改**爬列表已有工单的 primaryInfo** 拿真实主键，接口层 save 时直传（不依赖搜索）：
@@ -60,7 +60,7 @@ for lt in ["NAMELIST_APPLY","BRAND_PROTECT"]:
 |----|------|
 | antd Select 普通 click 不打开 | 在 `.ant-select-selector` 派发 `mousedown+mouseup` |
 | 弹窗字段 id 与列表筛选框冲突（#issueName） | 用 `.ant-modal` 作用域定位，或先 eval 打独立 id |
-| React 受控输入合成 fill 不进 Form state | CDP 真实键盘：`select()全选 + Input.insertText`（中文必须 insertText）→ 已封装 `~/AI-TEST/api-flows/_toolkit/cdp_type.py` |
+| React 受控输入合成 fill 不进 Form state | CDP 真实键盘：`select()全选 + Input.insertText`（中文必须 insertText）→ 已封装 `~/baseline-test/_toolkit/cdp_type.py` |
 | tags 输入（店铺Handle） | insertText 后在元素上派发 Enter |
 | recorder ws 超时退出 | 关键抓包前 `nohup python3 recorder.py <session> &` 重启（追加写不丢） |
 | 弹窗底部按钮点不中 | `.ant-modal-footer .ant-btn-primary` |
@@ -127,7 +127,7 @@ for lt in ["NAMELIST_APPLY","BRAND_PROTECT"]:
 | MERCHANT_ONBOARDING | merchantId,merchantName | li0106@123.com + merchantName | BatchAddWords |
 | BRAND_PROTECTION | sellerId,merchantId,merchantName | li0106@123.com + brandType/品牌名/有效期 | 品牌授权(若 IsWriteQualification=1) |
 
-**复跑**：`RISK_COOKIE=$(cat /tmp/risk_cookie.txt) python3 runner.py flow-all-types.yaml`
+**复跑**：`RISK_COOKIE=$(cat /tmp/risk_cookie.txt) python3 ~/.claude/skills/regression-runner/scripts/regression_runner.py flow-all-types.yaml --smoke`
 
 ---
 
@@ -194,7 +194,7 @@ nwo_init(列表) / newform~3(新建弹窗) / detail(详情) / mydetail / edit / 
 ## 十、★ 延伸到其他模块的 Checklist
 
 **可直接复用（不用改）**：
-- `~/AI-TEST/api-flows/_toolkit/cdp_type.py`（antd 受控输入助手）
+- `~/baseline-test/_toolkit/cdp_type.py`（antd 受控输入助手）
 - `ui/ui_runner.py` 的 helper 函数集（nav/click_text/open_select/type_real/...）
 - flow.yaml 的参数化结构（base_url/cookie/run_id/extract 链式）
 - 四阶段方法论
