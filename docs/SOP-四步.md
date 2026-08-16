@@ -65,9 +65,24 @@
 
 双源探索（ego 页面遍历 + 前后端代码扫描）+ 枚举维度表 + baseline.yaml 落盘。设计见 SPEC.md，实现在 `steps/1-explore/`（待建）。
 
-## 第③步：tc-run（建设中）
+## 第③步：tc-run —— 执行回归 + 完整报告
 
-一键回归（API + UI 统一 ego 通道）+ 总览 HTML 报告。实现在 `steps/3-run/`（待建）。
+**前置（缺任何一项先回②）**
+- `coverage/*.yaml` 已过 `check_coverage.py` 放行（exit 0）
+- 模块根已装配 `steps/3-run/templates/` 五件套（装配表见 `steps/3-run/README.md`）
+
+**跑法**
+```bash
+python3 run_regression.py --dry-run    # 先全量预检（ego/flow/场景/文件齐全性）
+python3 run_regression.py              # 全量：API → UI → 报告 → 对账
+```
+
+**完成标志**：三个产物齐（api-exec-result.json / ui-ego-exec-result.json / 总览 HTML），
+对账打印的实际数字与 `baseline.yaml` 基线口径一致（恒红须是口径里注明的那几个）。
+**全绿判定不在这一步**——数字与口径不符、或口径本身要过期，都交给 ④tc-verify 审查。
+
+**注意**：`--dry-run` 与全量跑之间不要改代码；报告 HTML 单文件离线可发，
+内嵌截图与断言明细，是 ④审查的对账证据源。
 
 ## 第④步：tc-verify（建设中）
 

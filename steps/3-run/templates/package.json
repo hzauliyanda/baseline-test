@@ -1,0 +1,6 @@
+{
+  "scripts": {
+    "test": "python3 auto/ui/ego_ui_runner.py",
+    "regression": "python3 run_regression.py ."
+  }
+}

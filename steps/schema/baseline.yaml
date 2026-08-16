@@ -3,6 +3,7 @@
 # 金标准实例：examples/risk-normal-work-order/baseline.yaml
 
 module: <模块标识-kebab-case>          # 如 risk-normal-work-order
+title: <中文显示名>                     # 如 普通工单（报告标题/文件名用）
 system: <系统名>                       # 如 风控 CS 平台
 entry_url: <https://测试环境入口>       # ego 探索与回归的目标环境
 created: <YYYY-MM-DD>

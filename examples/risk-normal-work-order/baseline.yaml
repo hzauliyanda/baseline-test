@@ -1,5 +1,6 @@
 # 金标准实例：风控·普通工单（真实数据首填 2026-08-16）
 module: risk-normal-work-order
+title: 普通工单
 system: 风控 CS 平台
 entry_url: https://test-risk.inshopline.com
 created: 2026-08-02
