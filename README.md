@@ -23,7 +23,9 @@ Claude Code 和 Codex 都能用同一套，产物一样、门一样。
 
 ## 安装
 
-按你用的 AI 工具二选一，**整段复制贴给它**，装完它会回你结果。
+Claude Code 和 Codex 都支持 skill（同一套 agentskills 标准，SKILL.md 同格式），
+区别只在 skill 目录：`~/.claude/skills/` vs `~/.codex/skills/`。
+按你用的工具二选一，**整段复制贴给它**，装完它会回你结果。
 
 **Claude Code 用户**（装 4 个薄壳 skill，之后说「跑回归」「审查收口」就能触发）：
 
@@ -36,14 +38,20 @@ Claude Code 和 Codex 都能用同一套，产物一样、门一样。
 （第 4 步把薄壳里的 <kit根> 占位符替换为实际克隆路径；装到别的路径就把 1 和 4 里的路径一起换）
 ```
 
-**Codex 用户**（没有 skill 机制，clone 即用，只需一步）：
+**Codex 用户**（同样装 4 个薄壳 skill，只是目录不同）：
 
 ```
-帮我安装 baseline-test kit：git clone <kit仓地址> ~/baseline-test
-装好后读 ~/baseline-test/AGENTS.md，回我它指向的操作手册路径。
+帮我安装 baseline-test kit，逐步执行下面四条命令并回我每步结果：
+1. git clone <kit仓地址> ~/baseline-test
+2. mkdir -p ~/.codex/skills
+3. cp -r ~/baseline-test/skills/tc-* ~/.codex/skills/
+4. perl -pi -e 's|<kit根>|$ENV{HOME}/baseline-test|g' ~/.codex/skills/tc-*/SKILL.md
+（第 4 步把薄壳里的 <kit根> 占位符替换为实际克隆路径；装到别的路径就把 1 和 4 里的路径一起换。
+ 装完开新会话才会发现 skill；没被发现就重启会话再试）
 ```
 
-日常使用时对 Codex 说：「读 ~/baseline-test/docs/SOP-四步.md，按我所在的步骤干活」。
+两边的薄壳内容一样，都只是指向 `docs/SOP-四步.md` 的触发壳——不装 skill 也行，
+直接对 AI 说「读 ~/baseline-test/docs/SOP-四步.md，按我所在的步骤干活」。
 
 ## 5 分钟上手（拿一个真实模块）
 
@@ -76,7 +84,7 @@ python3 ~/baseline-test/steps/1-explore/scan_repos.py ~/my-modules/xxx \
 | `docs/SOP-四步.md` | **主操作手册**（含回填循环） | 人 + 任何 AI |
 | `SPEC.md` | 设计契约（冲突时以它为准） | 想改 kit 的人 |
 | `steps/1..4-*/` | 每步的脚本 + README（逻辑都在这） | AI 执行时读 |
-| `skills/tc-*` | Claude Code 触发薄壳（20 行/个） | Claude 用户 |
+| `skills/tc-*` | 触发薄壳（20 行/个，装进 `~/.claude/skills/` 或 `~/.codex/skills/`） | Claude / Codex 用户 |
 | `examples/risk-normal-work-order/` | 金标准实例 | 所有人对照 |
 | `AGENTS.md` / `CLAUDE.md` | Codex / Claude 的仓库入口指针 | AI |
 
