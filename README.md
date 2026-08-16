@@ -23,7 +23,9 @@ Claude Code 和 Codex 都能用同一套，产物一样、门一样。
 
 ## 安装
 
-**发给你的 AI 的安装命令**（复制整段贴给 Claude Code 或 Codex，装完它会回你一句装好了）：
+按你用的 AI 工具二选一，**整段复制贴给它**，装完它会回你结果。
+
+**Claude Code 用户**（装 4 个薄壳 skill，之后说「跑回归」「审查收口」就能触发）：
 
 ```
 帮我安装 baseline-test kit，逐步执行下面四条命令并回我每步结果：
@@ -31,12 +33,17 @@ Claude Code 和 Codex 都能用同一套，产物一样、门一样。
 2. mkdir -p ~/.claude/skills
 3. cp -r ~/baseline-test/skills/tc-* ~/.claude/skills/
 4. perl -pi -e 's|<kit根>|$ENV{HOME}/baseline-test|g' ~/.claude/skills/tc-*/SKILL.md
-（第 4 步把薄壳里的 <kit根> 占位符替换为实际克隆路径；装到别处就把 1 和 4 里的路径一起换）
+（第 4 步把薄壳里的 <kit根> 占位符替换为实际克隆路径；装到别的路径就把 1 和 4 里的路径一起换）
 ```
 
-- Claude Code 用户：上面的命令会把 4 个薄壳 skill（tc-explore/cases/run/verify）装进 `~/.claude/skills/`，之后说「跑回归」「审查收口」就能触发
-- Codex 用户：**不用装 skill**，clone 仓库即可，对 AI 说「读 ~/baseline-test/docs/SOP-四步.md 按我所在的步骤干活」
-- 装到别处：把命令里的 `~/baseline-test` 全换成你的路径
+**Codex 用户**（没有 skill 机制，clone 即用，只需一步）：
+
+```
+帮我安装 baseline-test kit：git clone <kit仓地址> ~/baseline-test
+装好后读 ~/baseline-test/AGENTS.md，回我它指向的操作手册路径。
+```
+
+日常使用时对 Codex 说：「读 ~/baseline-test/docs/SOP-四步.md，按我所在的步骤干活」。
 
 ## 5 分钟上手（拿一个真实模块）
 
