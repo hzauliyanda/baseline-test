@@ -1,0 +1,77 @@
+{
+  "date": "2026-08-16",
+  "module": "risk-normal-work-order",
+  "machine_result": "HARD_FAIL",
+  "checks": [
+    {
+      "id": "A",
+      "name": "产物齐全",
+      "pass": true,
+      "missing": []
+    },
+    {
+      "id": "B",
+      "name": "数字对账",
+      "pass": true,
+      "recomputed": {
+        "ui": {
+          "pass": 21,
+          "fail": 1,
+          "skip": 0,
+          "scenes": 22
+        },
+        "api": {
+          "pass": 136,
+          "fail": 2,
+          "steps": 138,
+          "db_checks": 46
+        }
+      }
+    },
+    {
+      "id": "C",
+      "name": "恒红核对",
+      "pass": false,
+      "findings": [
+        "UI 场景 [S13] FAIL 但口径未容纳（口径原文：22 场景全绿；S4/S5 条件 SKIP 属已知语义（非末级审批人/非当前审批人）…）"
+      ]
+    },
+    {
+      "id": "D",
+      "name": "覆盖门复跑",
+      "pass": false,
+      "exit": 1,
+      "tail": [
+        "  🔴 状态机[工单状态] 缺状态: ['审批中', '已废弃', '待提交'] → 每个可达状态至少 1 条场景到达或 exempt",
+        "",
+        "VERDICT: 不放行（7 缺口 / 0 警告）——补全后重跑本脚本"
+      ]
+    },
+    {
+      "id": "E",
+      "name": "假覆盖扫描",
+      "pass": false,
+      "findings": [
+        "api-coverage.yaml 枚举[工单状态] covered['10已废弃'] 空=假覆盖"
+      ]
+    },
+    {
+      "id": "F",
+      "name": "audit_base",
+      "pass": true,
+      "values": {
+        "backend": "master@⏳待回填commit",
+        "frontend": "local@⏳待回填commit"
+      }
+    }
+  ],
+  "findings": [
+    "UI 场景 [S13] FAIL 但口径未容纳（口径原文：22 场景全绿；S4/S5 条件 SKIP 属已知语义（非末级审批人/非当前审批人）…）",
+    "check_coverage 未放行（缺口未清）",
+    "api-coverage.yaml 枚举[工单状态] covered['10已废弃'] 空=假覆盖"
+  ],
+  "warnings": [
+    "audit_base[backend] 待回填",
+    "audit_base[frontend] 待回填"
+  ]
+}

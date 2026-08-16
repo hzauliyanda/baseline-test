@@ -84,6 +84,24 @@ python3 run_regression.py              # 全量：API → UI → 报告 → 对�
 **注意**：`--dry-run` 与全量跑之间不要改代码；报告 HTML 单文件离线可发，
 内嵌截图与断言明细，是 ④审查的对账证据源。
 
-## 第④步：tc-verify（建设中）
+## 第④步：tc-verify —— 审查收口
 
-干净上下文 subagent 五项对账（数字/三桶纪律/断言抽查/覆盖对账/篡改检测）。实现在 `steps/4-verify/`（待建）。
+**前置（缺任何一项先回③）**
+- ③的三个产物齐：api-exec-result.json / ui-ego-exec-result.json / 报告 HTML
+
+**跑法（两层）**
+```bash
+# 1) 机算六项：产物齐全 / 数字独立重算vs报告 / 恒红核对 / 覆盖门复跑 / 假覆盖 / audit_base
+python3 steps/4-verify/verify_recon.py <模块根目录>
+#    → docs/reports/verify-recon-<date>.json；exit 1 时 findings 交第 2 层裁决
+
+# 2) 干净上下文审查（五项对账：数字/三桶纪律/断言真实性/覆盖抽查/SKIP·FAIL理由）
+#    Claude：派只读 subagent，输入 = steps/4-verify/PROMPT-审查清单.md + 模块根路径
+#    Codex ：开新会话贴同样内容；verdict 由审查者落盘
+```
+
+**完成标志**：`docs/reports/verify-<date>.md` 落盘且结论 ≠ FAIL。
+PASS-with-notes 的待办（如 audit_base 回填）指明进下轮 ①或②。
+
+**注意**：执行会话不得自己给自己出 verdict——审查者必须干净上下文；
+flake 判定必须有落盘复跑证据。
