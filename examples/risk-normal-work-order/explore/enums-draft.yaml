@@ -1,4 +1,7 @@
 generated: '2026-08-16'
+scan_base:
+  backend: feature/zym/monitor-0708@fae1c7bc4
+  frontend: master@1ec3ec8
 note: draft——① 圈选模块相关维度进功能地图枚举维度表，并补 behavior_branch 列
 dimensions:
 - name: account_source

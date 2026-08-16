@@ -9,7 +9,7 @@
 | 工具 | 干什么 |
 |---|---|
 | `new-module.sh <模块根> [--backend 仓] [--frontend 仓] [--title 中文名]` | 脚手架：目录骨架 + baseline.yaml（origin url 与 audit_base=分支@HEAD 自动填，消灭⏳待回填）+ ③模板五件套 + coverage 模板 |
-| `scan_repos.py <模块根> [--api-prefix /mapi/xx] [--frontend-key 关键词]` | 双源扫描 → `explore/` 三份 draft：backend-endpoints / enums-draft（含前端交叉引用）/ frontend-pages |
+| `scan_repos.py <模块根> [--api-prefix /mapi/xx] [--frontend-key 关键词] [--diff]` | 双源扫描 → `explore/` 三份 draft：backend-endpoints / enums-draft（含前端交叉引用）/ frontend-pages；`--diff` 与上次落盘 draft 对比出增量审计报告 `audit-<date>.md`（exit 1=有漂移），draft 记录 scan_base 锚并刷新为本次 |
 | `capture_ego.sh <session> reload\|goto <url>\|drain` | ego-browser 抓包（cdp Network.enable + drainEvents + getResponseBody，产出 capture/*.jsonl；不依赖任何独立 CDP 工具链） |
 
 ## 操作顺序（新模块从零到①完成）
@@ -44,6 +44,19 @@
 - `功能地图.md`：含枚举维度表（维度 × 取值 × code ref × 行为分叉?）+ 页面/接口清单
 - `auto/api/flow.yaml`：主链路可执行初版
 - `explore/` 三份 draft 在仓（可复算、可审计）
+
+## 漂移审计（--diff，回填循环第③层）
+
+代码会持续变更，建基线时的 `audit_base` 和 draft 都会过期。大回归前或定期：
+
+```bash
+python3 steps/1-explore/scan_repos.py <模块根> --api-prefix ... --frontend-key ... --diff
+```
+
+- 与 `explore/` 上次落盘的 draft 对比，报出**新增/消失的 endpoint、枚举值、路由**
+  （`audit-<date>.md`；exit 0=无漂移，1=有漂移），然后刷新 draft 为本次（scan_base 记录锚）
+- 处置：新增项 → 功能地图回填 → ②增量用例 → 门重跑；消失项 → 核实下线/迁移后同步删
+- 实测（2026-08-16）：模拟删 1 endpoint + 1 枚举值后 --diff 全部报出，退出码 1
 
 ## 已实测（2026-08-16，普通工单金标准仓）
 

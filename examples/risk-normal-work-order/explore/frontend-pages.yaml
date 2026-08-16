@@ -1,4 +1,7 @@
 generated: '2026-08-16'
+scan_base:
+  backend: feature/zym/monitor-0708@fae1c7bc4
+  frontend: master@1ec3ec8
 frontend_key: normal-work-order
 routes:
 - path: /risk-cooperation/cs/normal-work-order

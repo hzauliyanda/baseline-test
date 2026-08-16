@@ -4,7 +4,8 @@
 用法：
   python3 steps/1-explore/scan_repos.py <模块根> \
       [--backend <本地后端仓>] [--frontend <本地前端仓>] \
-      [--api-prefix /mapi/cs/issue] [--frontend-key normal-work-order]
+      [--api-prefix /mapi/cs/issue] [--frontend-key normal-work-order] \
+      [--diff]
 
 repo 路径缺省读 <模块根>/baseline.yaml 的 repos.*.local。
 
@@ -12,10 +13,14 @@ repo 路径缺省读 <模块根>/baseline.yaml 的 repos.*.local。
   backend-endpoints.yaml   注释路由全集（@Get/@Post...，beego 形态；非此形态的仓由①人工补）
   enums-draft.yaml         枚举维度表草稿（EnumType{Code,Desc} 对 + 前端交叉引用）
   frontend-pages.yaml      前端路由树（config/routes.ts 形态）
+  audit-<date>.md          仅 --diff：与上次落盘 draft 的增量审计报告（回填循环第③层）
 
-退出码：0=扫描完成（哪怕结果为空，空结果本身就是信息）；2=仓库路径不存在
+--diff：先读旧 draft，重扫对比，输出新增/消失的 endpoint·枚举值·路由，然后
+**刷新 draft 为本次结果**（draft 即上次扫描的锚，scan_base 字段记录 commit）。
+
+退出码：0=扫描完成 / 无漂移；1=--diff 检出漂移（有增量待回填）；2=仓库路径不存在
 """
-import argparse, os, re, sys, datetime
+import argparse, os, re, sys, datetime, subprocess
 
 def die(msg):
     print(f"❌ {msg}", file=sys.stderr)
@@ -146,12 +151,87 @@ def cross_ref(frontend, dims):
                 if hits & dcodes:
                     d.setdefault("frontend_refs", []).append(rel)
 
+def git_anchor(repo):
+    """当前分支@短hash——draft 的扫描锚，下次 --diff 的对照基准"""
+    def g(*args):
+        r = subprocess.run(["git", "-C", repo, *args], capture_output=True, text=True)
+        return r.stdout.strip() if r.returncode == 0 else ""
+    br, h = g("rev-parse", "--abbrev-ref", "HEAD"), g("rev-parse", "--short", "HEAD")
+    return f"{br}@{h}" if h else None
+
+def load_draft(path, key):
+    if not os.path.exists(path):
+        return None
+    import yaml
+    d = yaml.safe_load(open(path, encoding="utf-8")) or {}
+    return d.get(key)
+
+def diff_report(old, eps, dims, routes, be_now, fe_now, out_dir):
+    """旧 draft vs 本次扫描 → 增量审计报告。返回漂移条数。"""
+    date = datetime.date.today().isoformat()
+    L = [f"# 增量审计报告 audit-{date}", ""]
+    L.append(f"- 本次扫描锚：backend `{be_now}` ｜ frontend `{fe_now}`")
+    L.append("- 处置路径：新增项 → 功能地图回填 → ②增量用例 → check_coverage 重跑；")
+    L.append("  消失项 → 核实是否下线/迁移，功能地图与 coverage 同步删。本报告不改任何用例。")
+    L.append("")
+
+    n = 0
+    # endpoint
+    k = lambda e: (e["method"], e["path"])
+    old_eps = old.get("endpoints") or []
+    if eps is not None and old_eps is not None:
+        gone = [e for e in old_eps if k(e) not in {k(x) for x in eps}]
+        new = [e for e in eps if k(e) not in {k(x) for x in old_eps}]
+        if new or gone:
+            L.append(f"## endpoint 变更（+{len(new)} / -{len(gone)}）")
+            for e in new:  L.append(f"- ➕ {e['method']} `{e['path']}`  ({e['ref']})")
+            for e in gone: L.append(f"- ➖ {e['method']} `{e['path']}`")
+            L.append(""); n += len(new) + len(gone)
+    # enums
+    old_dims = {d["name"]: d for d in (old.get("dimensions") or [])}
+    new_dims = {d["name"]: d for d in dims}
+    for name in sorted(set(old_dims) | set(new_dims)):
+        o, w = old_dims.get(name), new_dims.get(name)
+        if o is None:
+            L.append(f"## 枚举新增维度：{name}（{w['source_file']}，{len(w['values'])} 值）"); L.append(""); n += 1; continue
+        if w is None:
+            L.append(f"## 枚举消失维度：{name}（{o['source_file']}）"); L.append(""); n += 1; continue
+        oc = {v["code"] for v in o["values"]}; wc = {v["code"] for v in w["values"]}
+        add = [v for v in w["values"] if v["code"] not in oc]
+        sub = [v for v in o["values"] if v["code"] not in wc]
+        if add or sub:
+            L.append(f"## 枚举[{name}] 变更（{w['source_file']}）")
+            for v in add: L.append(f"- ➕ {v['code']} = {v['desc'] or '?'}")
+            for v in sub: L.append(f"- ➖ {v['code']} = {v['desc'] or '?'}")
+            L.append(""); n += len(add) + len(sub)
+    # routes
+    old_routes = old.get("routes") or []
+    if routes and old_routes:
+        op = {r["path"] for r in old_routes}; wp = {r["path"] for r in routes}
+        add = wp - op; sub = op - wp
+        if add or sub:
+            L.append(f"## 前端路由变更（+{len(add)} / -{len(sub)}）")
+            for p in sorted(add): L.append(f"- ➕ `{p}`")
+            for p in sorted(sub): L.append(f"- ➖ `{p}`")
+            L.append(""); n += len(add) + len(sub)
+
+    if n == 0:
+        L.append("## 无漂移")
+        L.append("")
+        L.append("endpoint / 枚举 / 路由与上次落盘 draft 完全一致——无需回填。")
+    path = os.path.join(out_dir, f"audit-{date}.md")
+    open(path, "w", encoding="utf-8").write("\n".join(L))
+    return n, path
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("module_root")
     ap.add_argument("--backend"); ap.add_argument("--frontend")
     ap.add_argument("--api-prefix", default="")
     ap.add_argument("--frontend-key", default="")
+    ap.add_argument("--diff", action="store_true",
+                    help="与上次落盘 draft 对比出增量审计报告（回填循环第③层）")
     a = ap.parse_args()
 
     ROOT = os.path.abspath(a.module_root)
@@ -177,13 +257,18 @@ def main():
     os.makedirs(out_dir, exist_ok=True)
     import yaml
 
+    # --diff：先收旧 draft（重扫后会被刷新，先读后写）
+    old = {}
+    if a.diff:
+        old["endpoints"]  = load_draft(os.path.join(out_dir, "backend-endpoints.yaml"), "endpoints")
+        old["dimensions"] = load_draft(os.path.join(out_dir, "enums-draft.yaml"), "dimensions")
+        old["routes"]     = load_draft(os.path.join(out_dir, "frontend-pages.yaml"), "routes")
+        if old["endpoints"] is None and old["dimensions"] is None:
+            print("ℹ️  无旧 draft——本次作为首扫基线（diff 无从对比）")
+
     print(f"▶ 后端路由扫描 {backend}（prefix={a.api_prefix or '全集'}）")
     eps = scan_endpoints(backend, a.api_prefix)
     print(f"  {len(eps)} 个 endpoint")
-    yaml.safe_dump({"generated": datetime.date.today().isoformat(),
-                    "api_prefix": a.api_prefix, "endpoints": eps},
-                   open(os.path.join(out_dir, "backend-endpoints.yaml"), "w", encoding="utf-8"),
-                   allow_unicode=True, sort_keys=False)
 
     print("▶ 后端枚举扫描（*enum*.go）")
     dims = scan_enums(backend)
@@ -195,20 +280,38 @@ def main():
         print(f"  ⚠️  {err}")
     else:
         print(f"  {len(routes)} 条路由")
-        yaml.safe_dump({"generated": datetime.date.today().isoformat(),
-                        "frontend_key": a.frontend_key, "routes": routes},
-                       open(os.path.join(out_dir, "frontend-pages.yaml"), "w", encoding="utf-8"),
-                       allow_unicode=True, sort_keys=False)
 
     print("▶ 前端交叉引用（枚举 code ↔ src 文件）")
     cross_ref(frontend, dims)
-    yaml.safe_dump({"generated": datetime.date.today().isoformat(),
+
+    # 扫描锚（draft 自带 commit，下次 --diff 的对照基准）
+    scan_base = {"backend": git_anchor(backend), "frontend": git_anchor(frontend)}
+
+    drift_n = None
+    if a.diff:
+        n, audit_path = diff_report(old, eps, dims, routes or [],
+                                    scan_base["backend"], scan_base["frontend"], out_dir)
+        drift_n = n
+        print(f"\n▶ 增量审计：{'🔴 ' + str(n) + ' 条漂移' if n else '🟢 无漂移'} → {audit_path}")
+
+    yaml.safe_dump({"generated": datetime.date.today().isoformat(), "scan_base": scan_base,
+                    "api_prefix": a.api_prefix, "endpoints": eps},
+                   open(os.path.join(out_dir, "backend-endpoints.yaml"), "w", encoding="utf-8"),
+                   allow_unicode=True, sort_keys=False)
+    if routes is not None:
+        yaml.safe_dump({"generated": datetime.date.today().isoformat(), "scan_base": scan_base,
+                        "frontend_key": a.frontend_key, "routes": routes},
+                       open(os.path.join(out_dir, "frontend-pages.yaml"), "w", encoding="utf-8"),
+                       allow_unicode=True, sort_keys=False)
+    yaml.safe_dump({"generated": datetime.date.today().isoformat(), "scan_base": scan_base,
                     "note": "draft——① 圈选模块相关维度进功能地图枚举维度表，并补 behavior_branch 列",
                     "dimensions": dims},
                    open(os.path.join(out_dir, "enums-draft.yaml"), "w", encoding="utf-8"),
                    allow_unicode=True, sort_keys=False)
 
-    print(f"\n✅ 三份 draft 落盘 {out_dir}/：圈选后进功能地图；不相关的维度显式排除（写进 note），不许静默丢")
+    print(f"\n✅ draft 已刷新 {out_dir}/（scan_base={scan_base['backend']}）：圈选后进功能地图；不相关的维度显式排除（写进 note），不许静默丢")
+    if a.diff and drift_n:
+        raise SystemExit(1)
 
 if __name__ == "__main__":
     main()
