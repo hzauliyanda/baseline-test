@@ -1,0 +1,50 @@
+name: "S17-新建表单：申请说明与主键tags"
+base_url: "https://test-risk.inshopline.com"
+covers: ["TC-NWO-017","TC-NWO-020"]
+frontend_branch: "F-C03(applyDesc 非必填/showCount + primaryKeyConfig tags 回车输入)"
+depends_on: []
+note: |
+  覆盖新建弹窗(其他类型)的字段细节(add-normal-order.tsx)：
+    · 工单名称 issueName 必填「请输入工单名称」，maxLength=50
+    · 主键字段(OTHER) primaryKeyConfig：Select mode=tags，open=false(禁下拉、回车输入)，maxTagCount=500，必填
+      实测模板『测试多个材料-001』该字段名为「店铺Handle」，placeholder「请输入店铺Handle，输入多个请分别按回车键」
+    · 申请说明 applyDesc：非必填，placeholder「请输入，200字符以内」，showCount(count 后缀)
+  已 ego-browser 实测(2026-08-12)：空提交仅报「请输入工单名称」+「请输入店铺Handle，输入多个请分别按回车键」；申请说明留空不报错。
+
+steps:
+  - action: navigate
+    url: "/risk-cooperation/cs/normal-work-order/list"
+    description: "S17-01: 导航到列表页"
+
+  - action: click
+    description: "S17-02: 新建工单 → 工单类型选「其他」→ 工单模板选『测试多个材料-001』，进第二层"
+
+  # 必填校验
+  - action: click
+    description: "S17-03: 不填任何字段，点「完成」"
+
+  - action: assert
+    description: "TC-NWO-020(必填): 空提交报「请输入工单名称」+ 主键字段「请输入店铺Handle，输入多个请分别按回车键」；申请说明【不报错】(非必填)。（已实测）"
+
+  # 主键 tags 回车输入
+  - action: input
+    description: "S17-04: 在主键字段「店铺Handle」输入一个值后按回车，再输入第二个值按回车(mode=tags 无下拉，靠回车成 tag)"
+    value: "handle-a{Enter}handle-b{Enter}"
+
+  - action: assert
+    description: "TC-NWO-017: 两个值分别成为独立 tag(标签)显示在字段内；不弹出候选下拉(open=false)"
+
+  # 申请说明 showCount / maxLength
+  - action: input
+    description: "S17-05: 申请说明输入一段文本，观察右下角字数统计(showCount，如 12/200)"
+    value: "自动化测试申请说明"
+
+  - action: assert
+    description: "S17-06: 申请说明为非必填；输入时显示字数统计后缀；上限约 200 字符(placeholder『请输入，200字符以内』)。注意：实测原生 maxLength 未强制截断(=-1)，200 为提示上限，超长以字数统计红字体现。"
+
+human_verify:
+  - id: HV-S17-01
+    tc_ids: ["TC-NWO-017","TC-NWO-020"]
+    method: screenshot
+    description: "截图验证主键tags与申请说明"
+    what_to_check: "①店铺Handle 内两个回车输入的值成为独立标签；②申请说明右下角有字数统计；③空提交时工单名称+店铺Handle 飘红，申请说明不飘红"

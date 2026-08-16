@@ -36,7 +36,7 @@
 
 ### 卡点 3：弹窗字段 id 与列表筛选框冲突 + React 受控输入
 - 现象：列表筛选框 `#issueName` 与「新建工单」弹窗「工单名称」字段 id 冲突；且该弹窗输入框为 React 受控组件，合成 fill / insertText 不进 Form store（onChange 未触发），提交时静默校验失败。
-- 处置：① 用 `.ant-modal` 作用域给弹窗字段打独立 id（`#modal_issueName`）；② 写 `cdp_type.py` 用 CDP 真实鼠标聚焦 + 逐字符 `Input.dispatchKeyEvent` 输入，React 正常捕获。脚本已留在 `~/AI-TEST/api-flows/cdp_type.py`，可复用于同类 antd 表单。
+- 处置：① 用 `.ant-modal` 作用域给弹窗字段打独立 id（`#modal_issueName`）；② 写 `cdp_type.py` 用 CDP 真实鼠标聚焦 + 逐字符 `Input.dispatchKeyEvent` 输入，React 正常捕获。脚本已留在 `~/baseline-test/cdp_type.py`，可复用于同类 antd 表单。
 - 同类坑：Cmd+A 全选清空在该输入上不生效（值会累积），编辑抄送邮箱时也出现；自动化填值需先清空再输入。
 
 ## 三、安全护栏执行情况

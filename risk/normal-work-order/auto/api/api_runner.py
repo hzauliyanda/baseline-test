@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""API flow runner：从 CDP Chrome 抓 cookie → 逐步执行 flow yaml → 保存含 response 的结果到 api-exec-result.json"""
+"""API flow runner：从 ego-browser 抓 cookie → 逐步执行 flow yaml → 保存含 response 的结果到 api-exec-result.json"""
 import sys, os, json, re, time, copy, requests, yaml
 from jsonpath_ng.ext import parse as jp_parse
 
@@ -17,7 +17,45 @@ FLOW_FILES = [
     "flow-negative.yaml",
 ]
 
-# ── 1. 从 CDP Chrome 抓 Cookie ──────────────────────────────────────────────
+# ── 1. 抓 Cookie：ego-browser 优先（2026-08-15 起），CDP 9333 兜底 ──────────
+def get_cookie_from_ego():
+    """ego-browser runtime 开已登录 tab，cdp('Network.getCookies') 抓全量 cookie（含 httpOnly
+    的 riskSessionId/armorSession——document.cookie 拿不到，必须走 CDP）。
+    2026-08-15 验证：抓到的串 curl 复放 /mapi/cs/issue/base/enums = SUCCESS。"""
+    script = (
+        "const task = await useOrCreateTaskSpace('risk-normal-work-order-regression')\n"
+        f"await openOrReuseTab('{BASE_URL}/', {{ wait: true, timeout: 25 }})\n"
+        f"const r = await cdp('Network.getCookies', {{ urls: ['{BASE_URL}'] }})\n"
+        "if (!r || !r.cookies || !r.cookies.length) { throw new Error('test-risk 无 cookie——ego-browser 登录态缺失') }\n"
+        "cliLog('COOKIE_LINE:' + r.cookies.map(c=>c.name+'='+c.value).join('; '))\n"
+    )
+    import subprocess, tempfile
+    with tempfile.NamedTemporaryFile("w", suffix=".sh", delete=False) as f:
+        f.write("ego-browser nodejs 2>&1 <<'EOF'\n" + script + "EOF\n")
+        sh = f.name
+    try:
+        out = subprocess.run(["bash", sh], capture_output=True, text=True, timeout=90).stdout
+        m = re.search(r"COOKIE_LINE:(.*)", out)
+        return m.group(1).strip() if m and m.group(1).strip() else None
+    finally:
+        os.unlink(sh)
+
+def get_cookie():
+    """优先级：RISK_COOKIE 显式注入 > ego-browser（默认，复用登录态）> CDP 9333（兜底）"""
+    env = os.environ.get("RISK_COOKIE", "").strip()
+    if env:
+        print(f"✅ 使用 RISK_COOKIE 环境变量（{len(env)} 字符）"); return env
+    try:
+        ck = get_cookie_from_ego()
+        if ck:
+            print(f"✅ ego-browser 抓到 Cookie（{len(ck)} 字符）"); return ck
+        print("⚠️ ego-browser 返回空 cookie，回退 CDP 9333")
+    except FileNotFoundError:
+        print("⚠️ ego-browser 未安装，回退 CDP 9333")
+    except Exception as e:
+        print(f"⚠️ ego-browser 不可用（{e}），回退 CDP 9333")
+    return get_cookie_from_cdp()
+
 def get_cookie_from_cdp():
     sys.path.insert(0, "/Users/liyanda/.claude/skills/api-flow-recorder/scripts")
     try:
@@ -84,11 +122,15 @@ def check_assert(assert_cfg, status_code, resp_json, ctx):
         passed = False
         detail = {}
         if "equals" in rule:
-            passed = (str(actual) == str(rule["equals"]))
-            detail = {"type":"equals","path":path,"expected":rule["equals"],"actual":actual,"pass":passed}
+            # 期望值支持 {{var}}（对齐 regression_runner.py 的 C 语义：用本轮 ctx 渲染后再比对；
+            # 未定义变量原样保留——失败输出里能看到漏配）
+            exp = render(str(rule["equals"]), ctx)
+            passed = (str(actual) == exp)
+            detail = {"type":"equals","path":path,"expected":exp,"actual":actual,"pass":passed}
         elif "contains" in rule:
-            passed = (rule["contains"] in str(actual or ""))
-            detail = {"type":"contains","path":path,"expected":rule["contains"],"actual":actual,"pass":passed}
+            exp = render(str(rule["contains"]), ctx)
+            passed = (exp in str(actual or ""))
+            detail = {"type":"contains","path":path,"expected":exp,"actual":actual,"pass":passed}
         elif "exists" in rule:
             passed = (actual is not None) if rule["exists"] else (actual is None)
             detail = {"type":"exists","path":path,"expected":rule["exists"],"actual":actual is not None,"pass":passed}
@@ -118,6 +160,7 @@ def run_flow(filepath, cookie):
 
     flow_name = flow.get("name", os.path.basename(filepath))
     step_results = []
+    skipped_steps = set()   # 已跳过的步骤 id——供「依赖 <step_id>」级联传导判定
 
     for step in flow.get("steps", []):
         sid   = step.get("id", "?")
@@ -128,10 +171,38 @@ def run_flow(filepath, cookie):
         if not req:
             continue
 
+        # skip_note 步骤缺变量 → 跳过不执行（对齐 regression_runner.py：不带变量硬跑只会
+        # 产生 401/404 假红污染仪表盘；非 skip 步骤保持原行为，变量原样保留可见漏配）。
+        # 级联传导：skip_note 声明「依赖 <step_id>」且该上游步骤本轮已跳过 → 一并跳过
+        # （静态变量检测不到「上游实体没建」的数据依赖，靠用例里的声明式依赖补齐）
+        if step.get("skip_note"):
+            blob = req.get("url","") + json.dumps(req.get("json") or {}, ensure_ascii=False) \
+                 + json.dumps(req.get("headers") or {}, ensure_ascii=False) \
+                 + " ".join(f"{k}={v}" for k,v in (req.get("params") or {}).items())
+            missing = sorted(v for v in set(re.findall(r"\{\{(\w+)\}\}", blob)) if not ctx.get(v))
+            dep_hit = [d for d in re.findall(r"依赖\s*([A-Za-z0-9_]+)", str(step.get("skip_note")))
+                       if d in skipped_steps]
+            if missing or dep_hit:
+                why = []
+                if missing: why.append(f"缺变量 {missing}")
+                if dep_hit: why.append(f"上游 {dep_hit} 已跳过")
+                note = f"⏭️ SKIP [{sid}] {'；'.join(why)}（skip_note：{step.get('skip_note')}）"
+                print(f"  {note}")
+                skipped_steps.add(sid)
+                step_results.append({"id":sid,"desc":sdesc,"method":method,"url":url,
+                    "status":0,"resp_preview":note,"asserts":[],"pass":True,"skipped":True,
+                    "elapsed_ms":0})
+                continue
+
         method  = render(req.get("method","GET"), ctx).upper()
         url     = render(req.get("url",""), ctx)
         headers = render(req.get("headers",{}), ctx)
         body    = render(req.get("json", req.get("body", None)), ctx)
+        # params → query string（此前被整个丢弃：带 ?punishSubIssueType= 的用例全部假红）
+        params = req.get("params")
+        if params:
+            qs = "&".join(f"{render(str(k),ctx)}={render(str(v),ctx)}" for k,v in params.items())
+            url += ("&" if "?" in url else "?") + qs
 
         print(f"  [{sid}] {method} {url}")
 
@@ -193,7 +264,7 @@ def run_flow(filepath, cookie):
 if __name__ == "__main__":
     import urllib3; urllib3.disable_warnings()
 
-    cookie = get_cookie_from_cdp()
+    cookie = get_cookie()
     all_results = []
 
     for fn in FLOW_FILES:

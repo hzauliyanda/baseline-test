@@ -1,0 +1,49 @@
+name: "S10-模板表单必填校验"
+base_url: "https://test-risk.inshopline.com"
+covers: ["TC-NWO-048"]
+frontend_branch: "F-T01(validateFields 阻断提交)"
+depends_on: []
+note: "覆盖「模板新建页所有必填项未填→点完成→form rules 逐项报错，不提交」。字段与文案来源：add-template/index.tsx 各 Form.Item rules。"
+
+steps:
+  - action: navigate
+    url: "/risk-cooperation/cs/normal-work-order/template/add"
+    description: "S10-01: 直接导航到模板新建页，等待表单与底部「完成/取消」按钮可见"
+
+  - action: assert
+    description: "S10-02: 表单加载，展示字段：模板类型(subIssueType,Radio/Select)、模板名称(中 issueConfigName)、模板名称(英 issueConfigNameEn)、模板说明(中 issueConfigDesc,showCount)、模板说明(英 issueConfigDescEn,showCount)；底部有「完成」「取消」按钮"
+
+  - action: click
+    description: "S10-03: 不填任何字段，直接点击底部「完成」按钮(.ant-btn-primary，文案「完成」)"
+
+  - action: assert
+    description: |
+      TC-NWO-048: 空表单点完成，逐项飘红共 7 条（已 ego-browser 实测 2026-08-12）：
+        「请选择模板类型」、「请输入模板名称」×2(中/英同文案)、「请输入模板说明(中)」、「请输入模板说明(英)」、
+        「请选择审批人」(审批区默认可见)、「请输入抄送人邮箱，多个英文逗号分隔」。
+      注意：主键字段/材料配置在未选类型时【不渲染】，故此刻【无】「请选择主键字段」报错——主键必填在选类型后才出现(见 S10-05/06)。
+      页面停留在新建页，未跳转、未提交成功 toast。
+
+  # 单项：填模板类型后主键 validator 仍拦（非 OTHER 场景在 s11 覆盖），此处只验必填
+  - action: select
+    description: "S10-04: 选择模板类型「其他」(OTHER)，观察字段区变化（应显示 主键字段 + 材料配置区）"
+    value: "其他"
+
+  - action: click
+    description: "S10-05: 仅选了类型，其余仍空，再次点「完成」"
+
+  - action: assert
+    description: "S10-06: 选类型后主键字段/材料区已渲染；此时点完成，模板名称(中/英)、说明(中/英)、主键字段「请选择主键字段」均报必填错误，未提交"
+
+human_verify:
+  - id: HV-S10-01
+    tc_ids: ["TC-NWO-048"]
+    method: screenshot
+    description: "截图验证必填项报错完整"
+    what_to_check: "截图：空态提交出现 7 条红色必填提示（模板类型/名称中/名称英/说明中/说明英/审批人/抄送人）；主键字段此刻不在页面上（未选类型不渲染）；底部按钮仍为「完成/取消」，未离开新建页"
+
+  - id: HV-S10-02
+    tc_ids: ["TC-NWO-048"]
+    method: network
+    description: "抓包验证未调用保存接口"
+    what_to_check: "DevTools Network：点击「完成」后无 POST 模板保存请求（validateFields 失败提前 return，不发网络请求）"

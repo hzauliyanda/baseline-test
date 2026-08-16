@@ -1,0 +1,78 @@
+name: "S16-名单数据多行与数据同步联动"
+base_url: "https://test-risk.inshopline.com"
+covers: ["TC-NWO-018"]
+frontend_branch: "F-C02(name-list.tsx: 主键/主键值必填、dataSync联动、添加上限、删除)"
+depends_on: []
+note: |
+  覆盖名单数据区(name-list.tsx)前端独有分支：
+    · 主键 fieldName 必填「请选择主键」；主键值 fieldValue 必填「请选择」(DebounceSelect 多选远程搜索)
+    · dataSyncSwitch Checkbox 联动(实测 2026-08-12)：
+        主键=商家账号 → 文案「自动同步该账号下的新增店铺数据，数据T+1同步」，默认勾选
+        主键=商家名称 → 文案「自动同步该商家下新增店铺数据，数据每周更新一次」，默认勾选
+        (名单剔除 NAME_LIST_DELETE 模板下该 Checkbox disabled，文案为「同时停止自动同步任务」)
+    · 「添加」按钮显隐：namelist.length <= namelistConfig.length - 1（受模板主键配置数上限；实测『名单申请测试1』只允许 1 行，加满即隐藏）
+    · 「删除」按钮：仅 index>0 的行显示
+    · 切换主键会清空该行主键值选项
+  实测入口模板：名单申请 → 名单申请测试1（主键选项：商家账号/商家名称）。
+
+steps:
+  - action: navigate
+    url: "/risk-cooperation/cs/normal-work-order/list"
+    description: "S16-01: 导航到列表页"
+
+  - action: click
+    description: "S16-02: 点「新建工单」→ 工单类型选「名单申请」→ 工单模板选『名单申请测试1』，进第二层"
+
+  - action: assert
+    description: "S16-03: 名单数据区出现一行：主键(单选「请选择主键」)、主键值(多选「请输入搜索」远程)；有「添加」按钮"
+
+  # 必填校验
+  - action: click
+    description: "S16-04: 名单数据留空，直接点「完成」"
+
+  - action: assert
+    description: "TC-NWO-018(必填): 主键报「请选择主键」、主键值报「请选择」；未提交"
+
+  # dataSync 联动：商家账号
+  - action: select
+    description: "S16-05: 主键下拉选「商家账号」"
+    value: "商家账号"
+
+  - action: assert
+    description: "TC-NWO-018(联动-账号): 出现数据同步 Checkbox「自动同步该账号下的新增店铺数据，数据T+1同步」，默认勾选。（已实测）"
+
+  # dataSync 联动：切商家名称，文案变化
+  - action: select
+    description: "S16-06: 主键切换为「商家名称」"
+    value: "商家名称"
+
+  - action: assert
+    description: "TC-NWO-018(联动-名称): 数据同步 Checkbox 文案变为「自动同步该商家下新增店铺数据，数据每周更新一次」；切主键后该行主键值被清空。（已实测）"
+
+  # 主键值远程搜索
+  - action: input
+    description: "S16-07: 在主键值(多选)输入关键字触发远程搜索(getMerchantByPrimaryField)，选中一项"
+    value: "liyanda"
+
+  - action: assert
+    description: "S16-08: 主键值可通过远程搜索选中并成 tag"
+
+  # 添加按钮上限
+  - action: click
+    description: "S16-09: 点「添加」新增第二行(若模板 namelistConfig 允许)"
+
+  - action: assert
+    description: "TC-NWO-018(上限): 名单行数达到模板 namelistConfig 上限后「添加」按钮隐藏(实测『名单申请测试1』上限为1行，加满即无「添加」)；index>0 的行出现「删除」按钮"
+
+human_verify:
+  - id: HV-S16-01
+    tc_ids: ["TC-NWO-018"]
+    method: screenshot
+    description: "截图验证 dataSync 文案随主键联动"
+    what_to_check: "①主键=商家账号时 Checkbox 文案含『T+1同步』；②主键=商家名称时文案含『每周更新一次』；两者默认勾选"
+
+  - id: HV-S16-02
+    tc_ids: ["TC-NWO-018"]
+    method: screenshot
+    description: "截图验证添加上限与删除按钮"
+    what_to_check: "名单行加到模板上限后无「添加」按钮；多行时非首行有「删除」按钮，首行无"

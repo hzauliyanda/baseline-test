@@ -1,0 +1,21 @@
+{
+  "run_date": "2026-08-12",
+  "system": "risk/normal-work-order",
+  "base_url": "https://test-risk.inshopline.com",
+  "driver": "ego-browser (持久化profile, liyanda已登录)",
+  "env": "test (test-risk.inshopline.com)",
+  "total_cases": 32,
+  "exports": {},
+  "api_notes": {
+    "list": "POST /mapi/cs/issue/normal/list",
+    "approve": "POST /mapi/cs/issue/normal/approve",
+    "edit": "POST /mapi/cs/issue/normal/edit"
+  },
+  "known_data": {
+    "待审批_liyanda可审批": ["6281","6280","6278","6277"],
+    "已完结": ["6289","6287","6286","6285","6283","6282"],
+    "模板_测试材料数量": "含必填材料",
+    "模板_名单申请测试1": "名单数据主键商家账号/商家名称",
+    "模板_测试多个材料-001": "14个非必填材料+店铺Handle主键tags"
+  }
+}

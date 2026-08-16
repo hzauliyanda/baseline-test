@@ -91,8 +91,15 @@ async function fillInput(selector: string, text: string) {
 }
 
 async function rowAction(action: string) {
+  // 等表格出现【含该操作】的数据行，再点（避免 networkidle 早于表格渲染的时序 flake）
+  await page.waitForFunction((act) => {
+    return Array.from(document.querySelectorAll('.ant-table-tbody tr.ant-table-row'))
+      .some(r => Array.from(r.querySelectorAll('a,button')).some(e => (e as HTMLElement).textContent?.trim() === act));
+  }, action, { timeout: 8000 }).catch(() => {});
   await page.evaluate((act) => {
-    const row = document.querySelector('.ant-table-tbody tr.ant-table-row') as HTMLElement;
+    const rows = Array.from(document.querySelectorAll('.ant-table-tbody tr.ant-table-row'));
+    const row = (rows.find(r => Array.from(r.querySelectorAll('a,button'))
+      .some(e => (e as HTMLElement).textContent?.trim() === act)) ?? rows[0]) as HTMLElement;
     (Array.from(row?.querySelectorAll('a,button') ?? [])
       .find(e => (e as HTMLElement).textContent?.trim() === act) as HTMLElement)?.click();
   }, action);

@@ -103,3 +103,72 @@ cases:
     name: "S9-no-del: canDel=false 模板无编辑/删除按钮"
     depends_on: []
     entry_url: "/risk-cooperation/cs/normal-work-order/template"
+
+  # ---- 批次B：模板表单校验（前端代码审计补充，2026-08-12）----
+  - file: s10-template-required.yaml
+    name: "S10: 模板表单必填校验"
+    depends_on: []
+    entry_url: "/risk-cooperation/cs/normal-work-order/template/add"
+
+  - file: s11-template-type-linkage.yaml
+    name: "S11: 模板类型驱动字段显隐与联动清空"
+    depends_on: []
+    entry_url: "/risk-cooperation/cs/normal-work-order/template/add"
+
+  - file: s12-template-material-config.yaml
+    name: "S12: 材料字段配置分支（ENUM限定/枚举值/重名/最多20）"
+    depends_on: []
+    entry_url: "/risk-cooperation/cs/normal-work-order/template/add"
+
+  - file: s13-template-approval-config.yaml
+    name: "S13: 审批与运营地区配置（必填/禁用/最多5级/抄送人）"
+    depends_on: []
+    entry_url: "/risk-cooperation/cs/normal-work-order/template/add"
+
+  - file: s14-template-edit-echo.yaml
+    name: "S14: 模板编辑回显与复制（disabled/走新增）"
+    depends_on: []
+    entry_url: "/risk-cooperation/cs/normal-work-order/template"
+
+  # ---- 批次C：新建普通工单表单深化（前端代码审计补充，2026-08-12）----
+  - file: s15-create-double-level-gate.yaml
+    name: "S15: 新建弹窗双层门槛与取消"
+    depends_on: []
+    entry_url: "/risk-cooperation/cs/normal-work-order/list"
+
+  - file: s16-namelist-multirow.yaml
+    name: "S16: 名单数据多行与数据同步联动"
+    depends_on: []
+    entry_url: "/risk-cooperation/cs/normal-work-order/list"
+
+  - file: s17-create-applydesc-primarykey.yaml
+    name: "S17: 新建表单-申请说明与主键tags"
+    depends_on: []
+    entry_url: "/risk-cooperation/cs/normal-work-order/list"
+
+  - file: s18-material-dynamic.yaml
+    name: "S18: 申请材料动态字段渲染与校验"
+    depends_on: []
+    entry_url: "/risk-cooperation/cs/normal-work-order/list"
+
+  # ---- 批次D：详情审批补充（前端代码审计补充，2026-08-12）----
+  - file: s19-approve-empty-remark.yaml
+    name: "S19: 空备注审批拦截"
+    depends_on: []
+    entry_url: "/risk-cooperation/cs/normal-work-order/list"
+
+  - file: s20-status-no-approve.yaml
+    name: "S20: 终态工单不可再审批与详情只读"
+    depends_on: []
+    entry_url: "/risk-cooperation/cs/normal-work-order/list"
+
+  # ---- 批次E：列表筛选补充（前端代码审计补充，2026-08-12）----
+  - file: s22-list-filter-template-linkage.yaml
+    name: "S22: 列表筛选-模板类型与工单模板联动"
+    depends_on: []
+    entry_url: "/risk-cooperation/cs/normal-work-order/list"
+
+  - file: s23-list-filter-user-time.yaml
+    name: "S23: 列表筛选-创建人/处理人与创建时间"
+    depends_on: []
+    entry_url: "/risk-cooperation/cs/normal-work-order/list"

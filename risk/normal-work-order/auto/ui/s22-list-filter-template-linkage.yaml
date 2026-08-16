@@ -1,0 +1,45 @@
+name: "S22-列表筛选：模板类型与工单模板联动"
+base_url: "https://test-risk.inshopline.com"
+covers: ["TC-NWO-006"]
+frontend_branch: "F-E01(list 筛选区 issueSubType / issueConfigId)"
+depends_on: []
+note: |
+  覆盖列表筛选区「模板类型 → 工单模板」联动行为。
+  ⚠️ ego-browser 实测(2026-08-12)有反转：在【列表筛选区】选「模板类型=名单申请」后，「工单模板」下拉【并未】收窄为仅名单申请模板，
+     反而出现跨类型模板(如 [KEEP]BRAND_PROTECTION_...)，选项数 12→16。
+     即列表筛选的工单模板【不随模板类型强过滤】(与新建弹窗内的类型→模板联动不同，勿混淆)。
+     此点疑似产品设计/潜在缺陷，标注为【需与产品/开发确认】。
+
+steps:
+  - action: navigate
+    url: "/risk-cooperation/cs/normal-work-order/list"
+    description: "S22-01: 导航到列表页，等筛选区(模板类型/工单模板/工单名称/创建人/创建时间/处理状态/主键值/处理人)可见"
+
+  - action: select
+    description: "S22-02: 展开「工单模板」下拉，记录未选模板类型时的选项集合(实测约12项)"
+
+  - action: select
+    description: "S22-03: 选择「模板类型=名单申请」"
+    value: "名单申请"
+
+  - action: select
+    description: "S22-04: 再次展开「工单模板」下拉，记录选项集合"
+
+  - action: assert
+    description: |
+      TC-NWO-006: 观察「工单模板」选项是否随「模板类型」变化。
+      实测结论(2026-08-12)：列表筛选中工单模板【不收窄】为名单申请专属——仍含其它类型模板(观察到 BRAND_PROTECTION 模板)，选项数不减反增(12→16)。
+      ⚠️ 与预期「随类型联动过滤」不符，需产品确认是否为设计如此；若产品要求联动，则此为缺陷。
+
+  - action: click
+    description: "S22-05: 选一个工单模板 + 点「查询」"
+
+  - action: assert
+    description: "S22-06: 列表按 issueSubType + issueConfigId 组合筛选返回结果(结果模板列与所选一致)"
+
+human_verify:
+  - id: HV-S22-01
+    tc_ids: ["TC-NWO-006"]
+    method: network
+    description: "抓包验证筛选参数与联动真相"
+    what_to_check: "对比选模板类型前后 工单模板下拉的候选来源接口(是否带 issueSubType 过滤参数)；确认 POST /mapi/cs/issue/normal/list 的 Payload 是否同时携带 issueSubType + issueConfigId。据此判定联动是前端未做还是接口未过滤。"

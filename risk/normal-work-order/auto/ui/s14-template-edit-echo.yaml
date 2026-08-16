@@ -1,0 +1,59 @@
+name: "S14-模板编辑回显与复制"
+base_url: "https://test-risk.inshopline.com"
+covers: ["TC-NWO-051"]
+frontend_branch: "F-T05(operateType=edit disabled 字段回显；copy 走新增)"
+depends_on: []
+note: |
+  覆盖「编辑模板 → 字段回显 + 关键字段 disabled」「复制模板 → 回显可改、提交走新增」。
+  edit 态 disabled：模板类型 subIssueType、模板名称(中) issueConfigName、模板名称(英) issueConfigNameEn(add-template/index.tsx:296,318,349)。
+  提交成功 toast：edit→「编辑成功」，copy/新建→「新增成功」(:133-148)。
+  入口：模板列表 canDel=true 的行有「编辑」；「复制」始终显示。
+
+steps:
+  # ---- 编辑回显 ----
+  - action: navigate
+    url: "/risk-cooperation/cs/normal-work-order/template"
+    description: "S14-01: 导航到模板列表页，找一条 canDel=true(有「编辑」按钮)的模板"
+
+  - action: click
+    description: "S14-02: 点击该模板行操作列的「编辑」，进入 /template/add?operateType=edit&issueConfigId=xxx"
+
+  - action: assert
+    description: "TC-NWO-051(回显): 表单各字段回显原值——模板类型、模板名称(中/英)、模板说明(中/英)、主键字段、材料/审批/抄送等按类型回显"
+
+  - action: assert
+    description: "TC-NWO-051(disabled): 已 ego-browser 实测(2026-08-12，以模板 id=897 名单申请为例)——编辑态 URL 为 ?issueConfigId=897&operateType=edit；「模板类型」「模板名称(中)」「模板名称(英)」均 disabled(不可改)且回显原值(名单申请/自动化测试创建/autoTest)；说明/材料/审批等可改"
+
+  # ---- 复制：回显但可改、提交走新增 ----
+  - action: navigate
+    url: "/risk-cooperation/cs/normal-work-order/template"
+    description: "S14-03: 返回模板列表页"
+
+  - action: click
+    description: "S14-04: 点击同一模板行的「复制」，进入 /template/add?operateType=copy&issueConfigId=xxx"
+
+  - action: assert
+    description: "S14-05: 已 ego-browser 实测——复制态 URL 为 ?issueConfigId=897&operateType=copy；字段同样回显，且「模板类型」「模板名称(中/英)」均可编辑(非 disabled)"
+
+  - action: input
+    description: "S14-06: 修改模板名称(中/英)为唯一新名(如 复制-自动化-{时间戳})，避免重名"
+    value: "复制-自动化测试模板"
+
+  - action: click
+    description: "S14-07: 点击「完成」提交"
+
+  - action: assert
+    description: "S14-08: 已 ego-browser 实测——复制改名后点完成，成功 toast「新增成功」并跳回模板列表，新增一条模板(不覆盖原模板 897)。实测建过一条『复制-自动化测试-<6位时间戳>』。"
+
+human_verify:
+  - id: HV-S14-01
+    tc_ids: ["TC-NWO-051"]
+    method: screenshot
+    description: "截图验证编辑态字段回显与 disabled"
+    what_to_check: "编辑页截图：模板类型/名称(中)/名称(英) 呈灰色 disabled 且带原值；说明与材料/审批区回显且可编辑"
+
+  - id: HV-S14-02
+    tc_ids: ["TC-NWO-051"]
+    method: network
+    description: "抓包验证复制走新增接口"
+    what_to_check: "复制态点完成时 DevTools Network 观察保存请求为新增(无原 issueConfigId 或走 add 语义)，Response 成功；toast「新增成功」"

@@ -1,0 +1,24 @@
+# 模块元信息（探索前补全空字段）
+system: slop
+module: open-api
+created: 2026-08-12
+env_url: "https://openapi-admin-v2-preview.inshopline.com"   # 预发/测试环境，多租户共用同一套代码
+module_base_path: "/{tenant}/manage/"   # 需先在租户选择页登录租户（oneship/ec20/ysoul_test/smartpush），{tenant} 替换为租户 code
+
+tenants:                   # 多租户特有：不同租户下数据分布差异很大，见功能地图 4.5
+  - oneship      # 物流业务，纯 REST（328条），GQL 侧全空
+  - ec20         # 电商核心，REST(1013) + GQL 并重（Admin-GQL 226/Storefront-GQL 231）
+  - ysoul_test   # 测试租户
+  - smartpush
+
+test_group: "测试域-测试"   # 新建测试用 API 一律挂在这个分组下，别挂真实业务分组
+
+repos:                     # 代码仓库指向——用于"用例↔代码覆盖审计"
+  backend: ""              #   后端仓库路径（接口用例↔后端分支审计），如 ~/Documents/project_code/go/src/armor-smart-platform
+  backend_branch: master
+  frontend: ""             #   ★预留：后续 git 前端代码后填此处（UI用例↔前端覆盖审计用）
+  frontend_branch: ""
+
+notes: |
+  三桶信任模型：🟢机器判定 / 🟡DB兜底(SQL人工) / 🔴纯人工。
+  两段式断言：assert(🟢) + db_check(🟡, runner忽略) + skip_note(🔴)。详见 api-flows/README.md。

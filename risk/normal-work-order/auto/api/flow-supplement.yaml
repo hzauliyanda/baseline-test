@@ -1,5 +1,5 @@
 # 断言两段式（key 存在=分桶，runner 无需改）：
-#   assert:   🟢机器判定段（status/$.code/静态 contains/exists；不渲染 {{var}}）
+#   assert:   🟢机器判定段（status/$.code/contains/exists；equals/contains 期望值支持 {{var}}，2026-08-15 C 起）
 #   db_check: 🟡DB兜底段（runner 忽略→永不自动通过；真表名 SQL，<..._id>/<run_id> 执行时替换）
 #   note:     ⏳待首跑回填 / 🔴需人工 的提示（runner 忽略）
 # 负向的精确判据用 $.message contains '<中文文案>'（与 flow-negative 实跑口径一致）；未跑的只标 ⏳ 不硬锁。

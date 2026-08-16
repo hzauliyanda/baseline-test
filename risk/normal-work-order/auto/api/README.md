@@ -46,12 +46,12 @@ python3 auto/api/flow2cases.py --with-branch-matrix
 # 2. 校验（可选）
 cd ~/ai-skills-test-generator/api-test-generator
 python3 scripts/validate_cases.py \
-  --input /Users/liyanda/AI-TEST/api-flows/risk/normal-work-order/auto/api/cases.json \
+  --input /Users/liyanda/baseline-test/risk/normal-work-order/auto/api/cases.json \
   --project risk_normal_work_order
 
 # 3. 上传到测试平台（需要 upload_cases.py）
 python3 scripts/upload_cases.py \
-  --input /Users/liyanda/AI-TEST/api-flows/risk/normal-work-order/auto/api/cases.json \
+  --input /Users/liyanda/baseline-test/risk/normal-work-order/auto/api/cases.json \
   --pid 0 \
   --pre-case-ids 12345 \
   --dry-run  # 先预检

@@ -7,7 +7,7 @@ desc: >
 # =====================================================================
 # 断言规范（两段式 · 靠 key 的存在天然分桶，runner 无需改）—— 与 flow.yaml 一致
 #   assert:    🟢机器判定段（runner 唯一评分）。只放 status / $.code equals / 静态子串 contains / exists。
-#              ⚠️ runner 不渲染 assert 块，禁用 {{var}}，只能静态串。
+#              equals/contains 期望值支持 {{var}}（2026-08-15 C 起，runner 用本轮 ctx 渲染）。
 #   db_check:  🟡DB兜底段（runner 忽略，永不自动通过）。真表名真列名，<issue_id>/<run_id> 执行时替换。
 #   skip_note: 🔴人工段（runner 跑不了 / 依赖前置 --set / 跨系统）。见 cases/手动覆盖清单.md。
 # 出处标记：✅实跑确认(可锁死) / ⏳待首跑回填(仅代码推断，勿当已验证)。

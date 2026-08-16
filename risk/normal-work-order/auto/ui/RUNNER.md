@@ -82,6 +82,15 @@ await page.keyboard.insertText(text.slice(0, 8));
 
 ## 前置条件
 
+**仅 UI 段**需要 Chrome CDP。API 段（api_runner.py）自 2026-08-15 起从 **ego-browser** 抓 cookie，不再依赖此 Chrome。
+
+antd 表单驱动能力（2026-08-16 ego 实测更新）：
+- ❌ ego **高层 helpers**（typeText/insertText/setNativeValue，元素级合成事件）无法同步 antd Form state——2026-08-12 实测，维持
+- ✅ ego **raw cdp 通道可以完整跑通 S2 建单全链路**（2026-08-16 纯 ego 实跑：radio 选其他 → 模板全名搜索精确选中「测试工单类型-一级审批」(configId=21) → `Input.insertText` 原生打入工单名称 → 店铺Handle tags 回车成 token → 提交弹窗关闭零校验错误 → API 查回 issueId 6356/storeHandle 真值 → 删除清理）
+- ⚠️ 回车成 tag 的正确姿势：**CDP `Input.dispatchKeyEvent` 不会被 rc-select tokenizer 认**（试过带 text:'\r' 也无效）；必须页面内合成 `new KeyboardEvent('keydown', {key:'Enter', keyCode:13, bubbles:true})` 派发到搜索 input（React 根节点收合成事件即触发）。主键字段源码即证：`mode="tags"` + `open={false}`（下拉永不打开，纯回车成 token）
+- ⚠️ 模板选项必须**全名精确匹配**：搜「测试工单类型-一级」会同时命中「一级多人审批」变体，取错则字段/审批人全错（多人版主键是选项式「商家账号」Select、预填双人审批）
+- ⚠️ ego CLI 响应通道仍不稳（动作型调用回包概率性丢失，须 fire-and-forget+微读取轮询模式；useOrCreateTaskSpace/js() 挂死，claimTaskSpace+cdp() 可用）——**技术上 UI 段已可全迁 ego**，量产回归暂仍用 TS Playwright，待 ego 通道修复后即可切换（迁移=把 runner.spec.ts 的动作重写为上述 cdp 脚本模式）
+
 Chrome 需以 CDP 模式启动并已登录：
 
 ```bash

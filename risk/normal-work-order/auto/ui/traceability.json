@@ -1,8 +1,8 @@
 {
   "project": "风控普通工单 normal-work-order",
   "generated": "2026-08-01",
-  "source_functional_map": "/Users/liyanda/AI-TEST/api-flows/risk/normal-work-order/普通工单功能地图.md",
-  "source_test_cases": "/Users/liyanda/AI-TEST/api-flows/risk/normal-work-order/cases/普通工单-功能测试用例-2026-08-01.md",
+  "source_functional_map": "/Users/liyanda/baseline-test/risk/normal-work-order/普通工单功能地图.md",
+  "source_test_cases": "/Users/liyanda/baseline-test/risk/normal-work-order/cases/普通工单-功能测试用例-2026-08-01.md",
   "mappings": {
     "S1": {"name": "S1: 名单申请列表查询与筛选", "tc_ids": ["TC-NWO-001","TC-NWO-002","TC-NWO-003","TC-NWO-005","TC-NWO-009","TC-NWO-010","TC-NWO-011"], "priority": "P0", "depends_on": [], "entry_url": "/risk-cooperation/cs/normal-work-order/list"},
     "S2": {"name": "S2: 新建工单提交", "tc_ids": ["TC-NWO-012","TC-NWO-013","TC-NWO-014","TC-NWO-015","TC-NWO-016","TC-NWO-019"], "priority": "P0", "depends_on": [], "entry_url": "/risk-cooperation/cs/normal-work-order/list"},

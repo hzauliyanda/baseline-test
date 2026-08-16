@@ -6,7 +6,7 @@
 """
 import os, json, yaml, base64, html as H
 
-BASE = "/Users/liyanda/AI-TEST/api-flows/risk/normal-work-order"
+BASE = "/Users/liyanda/baseline-test/risk/normal-work-order"
 UI_DIR   = f"{BASE}/auto/ui"
 API_DIR  = f"{BASE}/auto/api"
 SHOTS    = f"{BASE}/auto/screenshots/ui"

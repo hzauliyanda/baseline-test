@@ -4,8 +4,9 @@ desc: 风控普通工单模块全链路（创建→详情→列表→编辑→�
 # =====================================================================
 # 断言规范（两段式 · 靠 key 的存在天然分桶，runner 无需改）
 #   assert:     🟢机器判定段——runner 唯一评分依据。只放"接口层能判死"的：
-#               status / $.code / 静态子串 contains / exists。
-#               ⚠️ runner 不渲染 assert 块，期望值里不能用 {{var}}，只能静态串。
+#               status / $.code / 子串 contains / exists。
+#               equals/contains 期望值支持 {{var}}（2026-08-15 C 起，runner 用本轮 ctx 渲染
+#               后再比对；未定义变量原样保留，失败输出可见漏配）。
 #   db_check:   🟡DB兜底段——runner 忽略，永不自动通过。接口返回 SUCCESS≠数据对，
 #               真伪由这里的 SQL 人工确认（真表名/真列名，见 <repo>/model/cs/...）。
 #               每条：table + sql + expect + reason；<run_id>/<issue_id> 用执行输出替换。
@@ -35,6 +36,8 @@ steps:
       json:
         - { path: "$.code", equals: "SUCCESS" }       # ✅实跑确认
         - { path: "$.data", exists: true }             # ✅ 枚举字典非空
+        - { path: "$.data.issueConfigSubTypeList", exists: true }   # ✅实跑确认 子类型枚举在
+        - { path: "$.data.normalIssueStatusList", exists: true }    # ✅实跑确认 状态枚举在
 
   # ---------- 2. 创建工单 ----------
   - id: create
@@ -88,6 +91,9 @@ steps:
         - { path: "$.code", equals: "SUCCESS" }            # ✅实跑确认
         - { path: "$.data.issueId", exists: true }         # ✅
         - { path: "$.data.issueName", contains: "[FLOW]" } # ✅ 回读名称=我们建的（前缀静态可判）
+        - { path: "$.data.approvalConfig", exists: true }  # ✅实跑确认 审批链回读在
+        - { path: "$.data.canApproval", exists: true }     # ✅实跑确认 审批权字段在
+        - { path: "$.data.issueStatus", exists: true }     # ✅实跑确认+独立probe(2026-08-15)：字段在，字符串枚举
 
   # ---------- 4. 列表查询（按名称过滤刚建的） ----------
   - id: list
@@ -105,8 +111,11 @@ steps:
       status: 200
       json:
         - { path: "$.code", equals: "SUCCESS" }                # ✅实跑确认
-        - { path: "$.data.list[0].issueId", exists: true }     # ⏳待首跑回填：确认分页字段路径确为 data.list[]（若非此路径，按真实结构改）
+        - { path: "$.data.list[0].issueId", exists: true }     # ✅实跑确认 分页字段路径 data.list[]
         - { path: "$.data.list[0].issueName", contains: "[FLOW]" }
+        - { path: "$.data.list[0].creatorName", exists: true } # ✅实跑确认
+        - { path: "$.data.list[0].issueConfigId", exists: true } # ✅实跑确认
+        - { path: "$.data.list[0].issueId", equals: "{{issue_id}}" } # ✅C后可用：锁"查回的就是刚建那条"（首跑待确认）
 
   # ---------- 5. 编辑（改抄送名单） ----------
   - id: edit
@@ -122,11 +131,26 @@ steps:
       status: 200
       json:
         - { path: "$.code", equals: "SUCCESS" }        # ✅实跑确认
+        - { path: "$.data", equals: true }             # ✅实跑确认 受理返回 data=true
     db_check:                            # 🟡 编辑真伪：SUCCESS 不代表真改了库
       - table: t_cs_issue
         sql: "SELECT carbon_list, deleted_at FROM t_cs_issue WHERE id=<issue_id>;"
         expect: "carbon_list 含 'edited-<run_id>@shoplineapp.com'（旧的 liyanda@ 被替换）；deleted_at 仍=0"
         reason: "编辑抄送人是否真落库；顺带验编辑不误改软删列"
+
+  # ---------- 5.5 编辑回读（B：静态标记断言，接口层验证编辑真生效） ----------
+  - id: edit_verify
+    desc: 编辑后再查详情——接口层回读验证抄送人真的换了（DB 真伪仍归 db_check）
+    request:
+      method: GET
+      url: "{{base_url}}/mapi/cs/issue/normal/{{issue_id}}"
+      headers: { appId: "4", version: "v2", Cookie: "{{cookie}}" }
+    assert:
+      status: 200
+      json:
+        - { path: "$.code", equals: "SUCCESS" }              # ✅实跑确认
+        - { path: "$.data.carbonList", exists: true }        # ✅实跑确认 回显为数组
+        - { path: "$.data.carbonList", contains: "edited-{{run_id}}" } # ✅实跑确认（C能力）造数标记+本轮run_id双重锁
 
   # ---------- 6. 审批通过 ----------
   - id: approve
@@ -143,15 +167,30 @@ steps:
       status: 200
       json:
         - { path: "$.code", equals: "SUCCESS" }        # ✅实跑确认
+        - { path: "$.data", equals: true }             # ✅实跑确认 受理返回 data=true
     db_check:                            # 🟡 审批真伪：SUCCESS 不代表状态真流转（第2档）
       - table: t_cs_issue
         sql: "SELECT issue_status, current_approve_step_status FROM t_cs_issue WHERE id=<issue_id>;"
-        expect: "issue_status=3(已完结)；current_approve_step_status='SUCCESS'"
+        expect: "issue_status=3(已完结)；current_approve_step_status='SUCCESS'（⚠️2026-08-15 API回显issueStatus='4'，DB枚举与回显码的映射以人工核对为准）"
         reason: "单级 SINGLE 审批通过后工单是否真的流转到已完结"
       - table: t_cs_issue_log
         sql: "SELECT COUNT(*) FROM t_cs_issue_log WHERE issue_id=<issue_id>;"
         expect: ">=1 条审批流水"
         reason: "审批动作是否真写了操作日志（有 log 表可查则验，无则删本条）"
+
+  # ---------- 6.5 审批后回读（B：状态流转的接口层验证） ----------
+  - id: approve_verify
+    desc: 审批通过后再查详情——接口层验证工单状态真流转（DB 真伪仍归 db_check）
+    request:
+      method: GET
+      url: "{{base_url}}/mapi/cs/issue/normal/{{issue_id}}"
+      headers: { appId: "4", version: "v2", Cookie: "{{cookie}}" }
+    assert:
+      status: 200
+      json:
+        - { path: "$.code", equals: "SUCCESS" }            # ✅实跑确认
+        - { path: "$.data.issueStatus", exists: true }     # ✅实跑确认 字段路径
+        - { path: "$.data.issueStatus", equals: "4" }      # ✅实跑确认+独立probe(2026-08-15)：单级审批通过后回显"4"（已完结）。⚠️与db_check的issue_status=3映射差异留给DB人工核对
 
   # ---------- 7. 删除 ----------
   - id: delete
