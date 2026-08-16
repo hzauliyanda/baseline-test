@@ -57,18 +57,40 @@ Claude Code 和 Codex 都支持 skill（同一套 agentskills 标准，SKILL.md 
 
 ```bash
 # 1. 脚手架（前后端仓在本地的话，git 地址和审计 commit 自动填）
-~/baseline-test/steps/1-explore/new-module.sh ~/my-modules/xxx \
+~/baseline-test/steps/1-explore/new-module.sh ~/tc-modules/<系统>/<模块> \
     --backend ~/code/后端仓 --frontend ~/code/前端仓 --title 模块中文名
 
 # 2. 双源扫描（出 endpoint/枚举/路由 三份 draft）
-python3 ~/baseline-test/steps/1-explore/scan_repos.py ~/my-modules/xxx \
+python3 ~/baseline-test/steps/1-explore/scan_repos.py ~/tc-modules/<系统>/<模块> \
     --api-prefix /mapi/你的模块 --frontend-key 路由关键词
 
 # 3. 之后对你的 AI 说：
-#    「读 ~/baseline-test/docs/SOP-四步.md，模块在 ~/my-modules/xxx，从①的 ego 页面遍历继续」
+#    「读 ~/baseline-test/docs/SOP-四步.md，模块在 ~/tc-modules/<系统>/<模块>，从①的 ego 页面遍历继续」
 ```
 
 金标准参考：`examples/risk-normal-work-order/`（真实模块全链路产物，含 verdict 审查实录）。
+
+## 目录约定（铁律：kit ≠ 数据）
+
+| 目录 | 角色 | 性质 |
+|---|---|---|
+| `~/baseline-test/` | kit 本体（脚本 / SOP / skill 薄壳），`git pull` 即升级 | 工具仓 |
+| `~/tc-modules/<系统>/<模块>/` | 模块基线包（baseline.yaml / 用例 / coverage / explore draft） | 测试资产仓 |
+
+- **模块数据绝不放进 kit 仓**——kit 升级 `git pull`、数据沉淀互不干扰
+- 发现规则零配置：工作区下任何 `*/*/baseline.yaml` = 一个模块，建目录即登记
+- 建议整个工作区 `~/tc-modules/` 做成**一个公司私有仓**（新模块 = 新目录）；
+  capture/截图/报告 HTML 是敏感或每轮重生成的，脚手架的 `.gitignore` 已挡在库外
+- 换根：`TC_MODULES=~/别处 python3 ~/baseline-test/kit-admin.py status`
+
+**舰队视图**（模块多了以后的一览/巡检）：
+
+```bash
+python3 ~/baseline-test/kit-admin.py status
+# 系统 | 模块 | 覆盖门 | verdict | 最近报告 | audit_base
+#   覆盖门=check_coverage 实跑；audit_base=锚 vs 本地 HEAD（落后提示进①回填）
+# exit 0=全部健康；1=有模块需关注（门未过 / verdict=FAIL）——可直接当巡检定时任务
+```
 
 ## 依赖
 
@@ -84,6 +106,7 @@ python3 ~/baseline-test/steps/1-explore/scan_repos.py ~/my-modules/xxx \
 | `docs/SOP-四步.md` | **主操作手册**（含回填循环） | 人 + 任何 AI |
 | `SPEC.md` | 设计契约（冲突时以它为准） | 想改 kit 的人 |
 | `steps/1..4-*/` | 每步的脚本 + README（逻辑都在这） | AI 执行时读 |
+| `kit-admin.py` | 多模块舰队视图（`status`，glob 发现 + 覆盖门/verdict/漂移巡检） | 管多个模块的人 |
 | `skills/tc-*` | 触发薄壳（20 行/个，装进 `~/.claude/skills/` 或 `~/.codex/skills/`） | Claude / Codex 用户 |
 | `examples/risk-normal-work-order/` | 金标准实例 | 所有人对照 |
 | `AGENTS.md` / `CLAUDE.md` | Codex / Claude 的仓库入口指针 | AI |

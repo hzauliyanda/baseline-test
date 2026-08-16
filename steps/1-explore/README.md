@@ -14,7 +14,8 @@
 
 ## 操作顺序（新模块从零到①完成）
 
-1. **脚手架**：`new-module.sh ~/my-modules/xxx --backend <后端仓> --frontend <前端仓> --title 中文名`
+1. **脚手架**：`new-module.sh ~/tc-modules/<系统>/<模块> --backend <后端仓> --frontend <前端仓> --title 中文名`
+   （两级目录 = kit-admin status 的发现约定；脚手架同时装好 .gitignore——capture/截图/报告 HTML 不入库）
    - audit_base 自动取**本地仓当前分支@HEAD**——若本地在 feature 分支上，先切回
      master/main 再跑脚手架（或事后手改 baseline.yaml），否则审计基准锚在别人feature上
 2. **双源扫描**：`scan_repos.py ~/my-modules/xxx --api-prefix /mapi/<模块> --frontend-key <模块路由关键词>`

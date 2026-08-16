@@ -4,11 +4,12 @@
 # 用法：
 #   new-module.sh <模块根目录> [--backend <本地后端仓>] [--frontend <本地前端仓>] [--title <中文名>]
 #
-# 做四件事：
+# 做五件事：
 #   1. 建目录骨架（docs/{functional-cases,ui-cases,checklists,reports} auto/{api,ui,screenshots/ui} coverage explore）
 #   2. baseline.yaml 从 schema 模板生成；给了本地仓则自动填 url（origin）与 audit_base（当前分支@HEAD）
 #   3. 拷 ③tc-run 五件套模板到对应位置（ego_scenarios.py 拷成骨架，场景自己写）
 #   4. coverage 两份模板就位
+#   5. .gitignore：抓包/截图/每轮重生成的报告与 exec JSON 不入库（模块仓只沉淀资产）
 #
 # ego_scenarios.py 是普通工单参考实现，含真实场景代码——拷过去后必须整个换成自己模块的。
 set -euo pipefail
@@ -68,6 +69,24 @@ cp "$KIT/steps/3-run/templates/gen_report.py"     "$ROOT/"
 cp "$KIT/steps/3-run/templates/package.json"      "$ROOT/"
 cp "$KIT/steps/schema/api-coverage.yaml" "$ROOT/coverage/"
 cp "$KIT/steps/schema/ui-coverage.yaml"  "$ROOT/coverage/"
+
+# ── .gitignore：不入库的都是「每轮重新生成」或「含敏感信息」──────────
+# capture/ 含登录 cookie 的抓包；报告 HTML 内嵌截图（~9MB/份）；exec JSON 每轮覆盖
+cat > "$ROOT/.gitignore" <<'EOF'
+# 抓包含登录态/cookie，绝不入库
+capture/
+# 截图与执行中间产物（每轮回归重新生成）
+auto/screenshots/
+auto/api-exec-result.json
+auto/ui-ego-exec-result.json
+# 报告 HTML 内嵌截图体积大，每轮重新生成；verdict/审查记录（.md/.json）保留入库
+docs/reports/*.html
+# 其它
+__pycache__/
+*.pyc
+package-lock.json
+.DS_Store
+EOF
 
 echo "✅ 骨架就位：$ROOT"
 echo "   下一步：scan_repos.py $ROOT [--api-prefix ...] [--frontend-key ...]   # 双源扫描"

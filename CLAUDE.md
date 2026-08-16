@@ -5,4 +5,4 @@
 **任何 AI 工具（Claude Code / Codex）的入口都是 `docs/SOP-四步.md`**——先读它，
 按用户所处步骤干活；设计决策与契约见 `SPEC.md`（冲突时以 SPEC 为准）。
 
-当前进度：四步 + 回填循环（scan --diff 漂移审计）+ 顶层 README 全部落地 ✅——schema 定稿 / ①tc-explore（双源扫描+ego抓包+脚手架，真仓逐值验证）/ ②tc-cases（放行门）/ ③tc-run（真模块实测）/ ④tc-verify（verdict=FAIL 正确咬人）。
+当前进度：四步 + 回填循环 + 层1多模块管理（kit-admin status 舰队视图 + 目录约定 kit≠数据）全部落地 ✅——schema 定稿 / ①tc-explore（双源扫描+ego抓包+脚手架，真仓逐值验证）/ ②tc-cases（放行门）/ ③tc-run（真模块实测）/ ④tc-verify（verdict=FAIL 正确咬人）。
