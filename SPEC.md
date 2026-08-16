@@ -98,9 +98,9 @@ status 取值固定四态：`covered` / `skip_note`（带 note）/ `uncovered`�
 ## 十、工程顺序与状态
 
 1. ✅ schema 定稿（本文件 + steps/schema + 金标准实例首填）
-2. ⬜ tc-cases
+2. ✅ tc-cases（SOP② + check_coverage.py + skills/tc-cases）
 3. ⬜ tc-run
 4. ⬜ tc-verify
 5. ⬜ tc-explore（最难：api-flow-recorder 的 ego 化 + 双源扫描，最后攻）
 
-未定事项：kit 仓库放哪/是否独立 git init（待定，先本地目录）。
+git 已接原 remote（github.com/hzauliyanda/baseline-test，HEAD=kit）；旧仓内容三层保险：git 历史 + 本地 baseline-test-old-2026-08-16/ + zip 备份。
